@@ -1,0 +1,492 @@
+# Customer Orders Example: Customer Foundation Data Product
+#
+# This config demonstrates a simpler FDP with:
+# - Two source systems (CRM and billing)
+# - Schema transform per source
+# - Calculated fields (inline)
+# - Enrichment from reference tables
+# - Filtering (exclude test accounts)
+# - Pre and post validation (no quarantine)
+# - Entity resolution via data curation
+# - Contract enforcement
+# - Full refresh strategy (no incremental)
+
+pipeline:
+  name: "foundation.customer"
+  version: "2.1.0"
+  product_type: "foundation-base"
+  owner: "customer-domain"
+  domain: "customer"
+  description: >
+    Canonical customer entity - golden record resolved from CRM and billing systems.
+    One record per customer. CRM is the primary source for contact details;
+    billing is the primary source for financial attributes.
+
+  dbt:
+    target_schema: "intermediate"
+    foundation_schema: "foundation"
+    model_prefix: "int"
+    final_model_prefix: "fnd"
+    materialization: "view"
+    final_materialization: "table"
+    tags: ["foundation", "customer"]
+
+steps:
+
+  # SOURCES
+
+  - pattern: "batch_transfer"
+    config:
+      sources:
+        - name: "crm_customer"
+          schema: "raw"
+          table: "crm_customers"
+          description: "Customer records from the CRM system"
+          columns:
+            - name: "customer_id"
+              description: "CRM-assigned customer identifier"
+            - name: "first_name"
+              description: "Customer first name"
+            - name: "last_name"
+              description: "Customer last name"
+            - name: "email"
+              description: "Primary email address"
+            - name: "phone"
+              description: "Primary phone number"
+            - name: "customer_type"
+              description: "Customer classification (retail, business, corporate)"
+            - name: "country_code"
+              description: "ISO 3166-1 alpha-2 country code"
+            - name: "status_code"
+              description: "Account status (A=Active, I=Inactive, P=Pending, C=Closed)"
+            - name: "created_date"
+              description: "Account creation date"
+            - name: "last_activity_date"
+              description: "Date of most recent customer activity"
+
+        - name: "billing_customer"
+          schema: "raw"
+          table: "billing_customers"
+          description: "Customer records from the billing/invoicing system"
+          columns:
+            - name: "customer_id"
+              description: "Billing-assigned customer identifier (matches CRM)"
+            - name: "billing_name"
+              description: "Name on billing records"
+            - name: "billing_email"
+              description: "Billing contact email"
+            - name: "payment_method"
+              description: "Primary payment method"
+            - name: "credit_limit"
+              description: "Assigned credit limit"
+            - name: "outstanding_balance"
+              description: "Current outstanding balance"
+            - name: "last_payment_date"
+              description: "Date of most recent payment"
+            - name: "account_tier"
+              description: "Billing tier (standard, premium, enterprise)"
+
+  # PRE-VALIDATION
+
+  - pattern: "data_validation"
+    stage: "pre"
+    config:
+      rules:
+        - field: "customer_id"
+          type: "completeness"
+          severity: "error"
+          description: "Customer ID must be present in all source records"
+        - field: "customer_id"
+          type: "uniqueness"
+          severity: "error"
+          description: "Customer ID must be unique per source"
+        - field: "email"
+          type: "format"
+          severity: "warn"
+          description: "Email should match standard format"
+          params:
+            pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+        - field: "customer_type"
+          type: "accepted_values"
+          severity: "error"
+          description: "Customer type must be a valid classification"
+          params:
+            values: ["retail", "business", "corporate"]
+
+  # SCHEMA TRANSFORMS
+
+  - pattern: "schema_transform"
+    config:
+      source_ref: "crm_customer"
+      model_name: "int_customer_mapped_crm"
+      mappings:
+        - source_field: "customer_id"
+          target_field: "customer_id"
+          data_type: "varchar"
+          nullable: false
+          description: "Canonical customer identifier"
+        - source_field: "first_name"
+          target_field: "first_name"
+          data_type: "varchar"
+          description: "Customer first name"
+        - source_field: "last_name"
+          target_field: "last_name"
+          data_type: "varchar"
+          description: "Customer last name"
+        - source_field: "email"
+          target_field: "email"
+          data_type: "varchar"
+          description: "Primary email address"
+          pii: true
+        - source_field: "phone"
+          target_field: "phone"
+          data_type: "varchar"
+          description: "Primary phone number"
+          pii: true
+        - source_field: "customer_type"
+          target_field: "customer_type"
+          data_type: "varchar"
+          description: "Customer classification"
+        - source_field: "country_code"
+          target_field: "country_code"
+          data_type: "varchar"
+          description: "ISO 3166-1 alpha-2 country code"
+        - source_field: "status_code"
+          target_field: "status_code"
+          data_type: "varchar"
+          description: "Account status code"
+        - source_field: "created_date"
+          target_field: "created_date"
+          data_type: "date"
+          description: "Account creation date"
+        - source_field: "last_activity_date"
+          target_field: "last_activity_date"
+          data_type: "date"
+          description: "Most recent customer activity date"
+
+  - pattern: "schema_transform"
+    config:
+      source_ref: "billing_customer"
+      model_name: "int_customer_mapped_billing"
+      mappings:
+        - source_field: "customer_id"
+          target_field: "customer_id"
+          data_type: "varchar"
+          nullable: false
+          description: "Canonical customer identifier"
+        - source_field: "billing_name"
+          target_field: "billing_name"
+          data_type: "varchar"
+          description: "Name on billing records"
+        - source_field: "billing_email"
+          target_field: "billing_email"
+          data_type: "varchar"
+          description: "Billing contact email"
+          pii: true
+        - source_field: "payment_method"
+          target_field: "payment_method"
+          data_type: "varchar"
+          description: "Primary payment method"
+        - source_field: "credit_limit"
+          target_field: "credit_limit"
+          data_type: "decimal(12,2)"
+          description: "Assigned credit limit"
+        - source_field: "outstanding_balance"
+          target_field: "outstanding_balance"
+          data_type: "decimal(12,2)"
+          description: "Current outstanding balance"
+        - source_field: "last_payment_date"
+          target_field: "last_payment_date"
+          data_type: "date"
+          description: "Date of most recent payment"
+        - source_field: "account_tier"
+          target_field: "account_tier"
+          data_type: "varchar"
+          description: "Billing tier"
+
+  # ──────────────────────────────────────────────
+  # CALCULATED FIELDS
+  # ──────────────────────────────────────────────
+
+  - pattern: "calculated_fields"
+    config:
+      apply_mode: "inline"
+      fields:
+        - name: "full_name"
+          expression: "TRIM(first_name || ' ' || last_name)"
+          data_type: "varchar"
+          description: "Full customer name (first + last)"
+        - name: "is_active"
+          expression: "CASE WHEN status_code IN ('A', 'P') AND last_activity_date >= CURRENT_DATE - INTERVAL '365 days' THEN true ELSE false END"
+          data_type: "boolean"
+          description: "Whether the customer is currently active (status A or P, activity within 12 months)"
+        - name: "customer_tenure_months"
+          expression: "DATE_PART('month', AGE(CURRENT_DATE, created_date)) + DATE_PART('year', AGE(CURRENT_DATE, created_date)) * 12"
+          data_type: "integer"
+          description: "Customer tenure in months since account creation"
+      rule_version: "2026Q1"
+      rule_owner: "customer-domain"
+
+  # ──────────────────────────────────────────────
+  # ENRICHMENT
+  # ──────────────────────────────────────────────
+
+  - pattern: "data_enrichment"
+    config:
+      apply_mode: "inline"
+      enrichments:
+        - name: "customer_segment_lookup"
+          reference_model: "ref('dim_customer_segments')"
+          join_type: "left"
+          join_keys:
+            - source_field: "customer_type"
+              reference_field: "type_code"
+          fields:
+            - source_field: "segment_name"
+              target_field: "customer_segment"
+              description: "Customer segment classification"
+            - source_field: "service_tier"
+              target_field: "service_tier"
+              description: "Service tier based on segment"
+          fallback:
+            strategy: "default"
+            default_values:
+              - field: "customer_segment"
+                value: "'Unclassified'"
+              - field: "service_tier"
+                value: "'Standard'"
+
+        - name: "region_lookup"
+          reference_model: "ref('dim_regions')"
+          join_type: "left"
+          join_keys:
+            - source_field: "country_code"
+              reference_field: "country_code"
+          fields:
+            - source_field: "country_name"
+              target_field: "country_name"
+              description: "Full country name"
+            - source_field: "region"
+              target_field: "region"
+              description: "Geographic region"
+          fallback:
+            strategy: "null"
+
+  # ──────────────────────────────────────────────
+  # FILTERING
+  # ──────────────────────────────────────────────
+
+  - pattern: "data_filtering"
+    config:
+      apply_mode: "inline"
+      filters:
+        - name: "exclude_test_accounts"
+          predicate: "email NOT LIKE '%@test.%' AND email NOT LIKE '%@example.%'"
+          description: "Exclude internal test and example accounts"
+          severity: "exclude"
+        - name: "exclude_closed_accounts"
+          predicate: "status_code != 'C'"
+          description: "Exclude permanently closed accounts"
+          severity: "exclude"
+      audit:
+        log_counts: true
+
+  # ──────────────────────────────────────────────
+  # CURATION
+  # ──────────────────────────────────────────────
+
+  - pattern: "data_curation"
+    config:
+      entity_key: "customer_id"
+      resolution_strategy: "deterministic"
+      match_keys:
+        - source: "int_customer_mapped_crm"
+          keys: ["customer_id"]
+          priority: 1
+        - source: "int_customer_mapped_billing"
+          keys: ["customer_id"]
+          priority: 2
+      survivorship:
+        default_priority: ["int_customer_mapped_crm", "int_customer_mapped_billing"]
+        field_overrides:
+          - field: "credit_limit"
+            priority: ["int_customer_mapped_billing"]
+            rule: "source_priority"
+          - field: "outstanding_balance"
+            priority: ["int_customer_mapped_billing"]
+            rule: "source_priority"
+          - field: "payment_method"
+            priority: ["int_customer_mapped_billing"]
+            rule: "source_priority"
+          - field: "account_tier"
+            priority: ["int_customer_mapped_billing"]
+            rule: "source_priority"
+          - field: "last_payment_date"
+            priority: ["int_customer_mapped_billing"]
+            rule: "source_priority"
+
+  # ──────────────────────────────────────────────
+  # POST-VALIDATION
+  # ──────────────────────────────────────────────
+
+  - pattern: "data_validation"
+    stage: "post"
+    config:
+      rules:
+        - field: "customer_id"
+          type: "uniqueness"
+          severity: "error"
+          description: "Customer ID must be unique"
+        - field: "customer_id"
+          type: "completeness"
+          severity: "error"
+          description: "Customer ID must not be null"
+        - field: "full_name"
+          type: "completeness"
+          severity: "warn"
+          threshold: 0.98
+          description: "Full name should be at least 98% complete"
+        - field: "email"
+          type: "completeness"
+          severity: "warn"
+          threshold: 0.95
+          description: "Email should be at least 95% complete"
+        - field: "customer_type"
+          type: "accepted_values"
+          severity: "error"
+          description: "Customer type must be valid"
+          params:
+            values: ["retail", "business", "corporate"]
+
+  # ──────────────────────────────────────────────
+  # CONTRACT
+  # ──────────────────────────────────────────────
+
+  - pattern: "data_contracts"
+    config:
+      contract_enforced: true
+      description: "Foundation customer entity - one record per customer, contract-enforced."
+      columns:
+        - name: "customer_id"
+          data_type: "varchar"
+          description: "Canonical customer identifier"
+          constraints:
+            - type: "primary_key"
+          meta:
+            pii: true
+        - name: "full_name"
+          data_type: "varchar"
+          description: "Full customer name"
+          meta:
+            pii: true
+        - name: "first_name"
+          data_type: "varchar"
+          description: "Customer first name"
+          meta:
+            pii: true
+        - name: "last_name"
+          data_type: "varchar"
+          description: "Customer last name"
+          meta:
+            pii: true
+        - name: "email"
+          data_type: "varchar"
+          description: "Primary email address"
+          meta:
+            pii: true
+            sensitivity: "confidential"
+        - name: "phone"
+          data_type: "varchar"
+          description: "Primary phone number"
+          meta:
+            pii: true
+            sensitivity: "confidential"
+        - name: "customer_type"
+          data_type: "varchar"
+          description: "Customer classification"
+          constraints:
+            - type: "not_null"
+            - type: "accepted_values"
+              values: ["retail", "business", "corporate"]
+        - name: "customer_segment"
+          data_type: "varchar"
+          description: "Segment classification from reference"
+        - name: "service_tier"
+          data_type: "varchar"
+          description: "Service tier"
+        - name: "country_code"
+          data_type: "varchar"
+          description: "ISO country code"
+        - name: "country_name"
+          data_type: "varchar"
+          description: "Full country name"
+        - name: "region"
+          data_type: "varchar"
+          description: "Geographic region"
+        - name: "status_code"
+          data_type: "varchar"
+          description: "Account status code"
+        - name: "is_active"
+          data_type: "boolean"
+          description: "Whether the customer is currently active"
+        - name: "customer_tenure_months"
+          data_type: "integer"
+          description: "Tenure in months"
+        - name: "created_date"
+          data_type: "date"
+          description: "Account creation date"
+        - name: "last_activity_date"
+          data_type: "date"
+          description: "Most recent activity date"
+        - name: "billing_name"
+          data_type: "varchar"
+          description: "Name on billing records"
+        - name: "billing_email"
+          data_type: "varchar"
+          description: "Billing contact email"
+          meta:
+            pii: true
+        - name: "payment_method"
+          data_type: "varchar"
+          description: "Primary payment method"
+        - name: "credit_limit"
+          data_type: "decimal(12,2)"
+          description: "Assigned credit limit"
+        - name: "outstanding_balance"
+          data_type: "decimal(12,2)"
+          description: "Current outstanding balance"
+        - name: "last_payment_date"
+          data_type: "date"
+          description: "Most recent payment date"
+        - name: "account_tier"
+          data_type: "varchar"
+          description: "Billing tier"
+
+  # ──────────────────────────────────────────────
+  # LINEAGE, METADATA, PUBLISH
+  # ──────────────────────────────────────────────
+
+  - pattern: "lineage_capture"
+    config:
+      generate_mapping_doc: true
+      include_field_lineage: true
+
+  - pattern: "metadata_capture"
+    config:
+      meta_tags:
+        domain: "customer"
+        owner: "customer-domain"
+        tier: "tier1"
+        pii_contains: true
+
+  - pattern: "schema_publish"
+    config:
+      access: "protected"
+
+  - pattern: "data_publish"
+    config:
+      build_command_guidance: true
+
+checkpointing:
+  enabled: true
+  strategy: "full_refresh"

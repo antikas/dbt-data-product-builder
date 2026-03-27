@@ -1,0 +1,628 @@
+# Investment Domain Example: Fund Master Foundation Data Product
+#
+# This config demonstrates a multi-source FDP with:
+# - Two source systems (GP reports and administrator data)
+# - Schema transform per source
+# - Calculated fields (inline)
+# - Enrichment from reference tables
+# - Filtering (exclude test funds)
+# - Pre and post validation with quarantine
+# - Entity resolution via data curation (deterministic)
+# - Contract enforcement
+# - Incremental strategy
+
+pipeline:
+  name: "foundation.fund_master"
+  version: "1.0.0"
+  product_type: "foundation-base"
+  owner: "investment-data-team"
+  domain: "investments"
+  description: >
+    Canonical fund entity - golden record resolved from GP quarterly reports
+    and fund administrator data. One record per fund, with survivorship rules
+    preferring GP data for financial metrics and administrator data for legal details.
+
+  dbt:
+    target_schema: "intermediate"
+    foundation_schema: "foundation"
+    model_prefix: "int"
+    final_model_prefix: "fnd"
+    materialization: "view"
+    final_materialization: "incremental"
+    tags: ["foundation", "investments", "fund_master"]
+
+steps:
+
+  # SOURCES
+
+  - pattern: "batch_transfer"
+    config:
+      sources:
+        - name: "gp_quarterly_report"
+          schema: "raw"
+          table: "gp_quarterly_reports"
+          description: "GP quarterly report extractions - fund-level financial data"
+          loaded_at_field: "extraction_timestamp"
+          freshness:
+            warn_after:
+              count: 2
+              period: "day"
+            error_after:
+              count: 7
+              period: "day"
+          columns:
+            - name: "fund_id"
+              description: "GP-assigned fund identifier"
+              data_type: "varchar"
+            - name: "fund_name"
+              description: "Fund name as reported by the GP"
+              data_type: "varchar"
+            - name: "gp_name"
+              description: "General partner name"
+              data_type: "varchar"
+            - name: "strategy"
+              description: "Investment strategy (Buyout, Growth Equity, etc.)"
+              data_type: "varchar"
+            - name: "vintage_year"
+              description: "Fund vintage year"
+              data_type: "integer"
+            - name: "currency"
+              description: "Reporting currency (ISO 4217)"
+              data_type: "varchar"
+            - name: "committed_capital_mm"
+              description: "Total committed capital in millions"
+              data_type: "decimal"
+            - name: "called_capital_mm"
+              description: "Capital called to date in millions"
+              data_type: "decimal"
+            - name: "nav_mm"
+              description: "Net asset value in millions"
+              data_type: "decimal"
+            - name: "distributed_mm"
+              description: "Distributions to date in millions"
+              data_type: "decimal"
+            - name: "reporting_quarter"
+              description: "Reporting period (YYYY-QN format)"
+              data_type: "varchar"
+            - name: "report_date"
+              description: "Date of the GP report"
+              data_type: "date"
+            - name: "extraction_timestamp"
+              description: "When this record was extracted from the PDF"
+              data_type: "timestamp"
+
+        - name: "admin_fund_data"
+          schema: "raw"
+          table: "administrator_fund_records"
+          description: "Fund administrator records - legal and structural fund data"
+          loaded_at_field: "last_updated"
+          freshness:
+            warn_after:
+              count: 1
+              period: "day"
+            error_after:
+              count: 3
+              period: "day"
+          columns:
+            - name: "fund_id"
+              description: "Administrator-assigned fund identifier (matches GP fund_id)"
+              data_type: "varchar"
+            - name: "legal_name"
+              description: "Fund legal name (from fund documents)"
+              data_type: "varchar"
+            - name: "domicile"
+              description: "Fund domicile jurisdiction"
+              data_type: "varchar"
+            - name: "fund_structure"
+              description: "Legal structure (LP, LLC, etc.)"
+              data_type: "varchar"
+            - name: "inception_date"
+              description: "Fund inception date"
+              data_type: "date"
+            - name: "strategy_code"
+              description: "Strategy classification code"
+              data_type: "varchar"
+            - name: "currency"
+              description: "Fund base currency (ISO 4217)"
+              data_type: "varchar"
+            - name: "committed_capital_mm"
+              description: "Committed capital per administrator records"
+              data_type: "decimal"
+            - name: "administrator_name"
+              description: "Name of the fund administrator"
+              data_type: "varchar"
+            - name: "last_updated"
+              description: "Last update timestamp from administrator"
+              data_type: "timestamp"
+
+  # PRE-VALIDATION
+
+  - pattern: "data_validation"
+    stage: "pre"
+    config:
+      rules:
+        - field: "fund_id"
+          type: "completeness"
+          severity: "error"
+          description: "Fund ID must be present in all source records"
+        - field: "fund_id"
+          type: "uniqueness"
+          severity: "error"
+          description: "Fund ID must be unique per source per reporting quarter"
+          params:
+            combination_of_columns: ["fund_id", "reporting_quarter"]
+        - field: "vintage_year"
+          type: "range"
+          severity: "error"
+          description: "Vintage year must be within valid range"
+          params:
+            min: 1990
+            max: 2030
+        - field: "strategy"
+          type: "accepted_values"
+          severity: "warn"
+          description: "Strategy should be a recognised classification"
+          params:
+            values: ["Buyout", "Growth Equity", "Infrastructure", "Real Estate", "Venture Capital", "Credit", "Secondaries"]
+        - field: "currency"
+          type: "accepted_values"
+          severity: "error"
+          description: "Currency must be a valid ISO 4217 code"
+          params:
+            values: ["USD", "EUR", "GBP", "CHF", "JPY", "AUD", "CAD", "SGD", "AED"]
+        - field: "nav_mm"
+          type: "range"
+          severity: "warn"
+          description: "NAV should be non-negative"
+          params:
+            min: 0
+
+  # SCHEMA TRANSFORMS (one per source)
+
+  - pattern: "schema_transform"
+    config:
+      source_ref: "gp_quarterly_report"
+      model_name: "int_fund_master_mapped_gp"
+      mappings:
+        - source_field: "fund_id"
+          target_field: "fund_id"
+          data_type: "varchar"
+          nullable: false
+          description: "Canonical fund identifier"
+        - source_field: "fund_name"
+          target_field: "fund_name"
+          data_type: "varchar"
+          description: "Fund name as reported by the GP"
+        - source_field: "gp_name"
+          target_field: "gp_name"
+          data_type: "varchar"
+          description: "General partner name"
+        - source_field: "strategy"
+          target_field: "strategy"
+          data_type: "varchar"
+          description: "Investment strategy"
+        - source_field: "vintage_year"
+          target_field: "vintage_year"
+          data_type: "integer"
+          description: "Fund vintage year"
+        - source_field: "currency"
+          target_field: "currency"
+          data_type: "varchar"
+          description: "Reporting currency (ISO 4217)"
+        - source_field: "committed_capital_mm"
+          target_field: "committed_capital_mm"
+          data_type: "decimal(18,4)"
+          description: "Total committed capital in millions"
+        - source_field: "called_capital_mm"
+          target_field: "called_capital_mm"
+          data_type: "decimal(18,4)"
+          description: "Capital called to date in millions"
+        - source_field: "nav_mm"
+          target_field: "nav_mm"
+          data_type: "decimal(18,4)"
+          description: "Net asset value in millions"
+        - source_field: "distributed_mm"
+          target_field: "distributed_mm"
+          data_type: "decimal(18,4)"
+          description: "Distributions to date in millions"
+        - source_field: "reporting_quarter"
+          target_field: "reporting_quarter"
+          data_type: "varchar"
+          description: "Reporting period (YYYY-QN)"
+        - source_field: "report_date"
+          target_field: "report_date"
+          data_type: "date"
+          description: "Date of the GP report"
+      drop_fields: ["extraction_timestamp"]
+      deduplication:
+        enabled: true
+        keys: ["fund_id", "reporting_quarter"]
+        strategy: "latest"
+        order_field: "extraction_timestamp"
+
+  - pattern: "schema_transform"
+    config:
+      source_ref: "admin_fund_data"
+      model_name: "int_fund_master_mapped_admin"
+      mappings:
+        - source_field: "fund_id"
+          target_field: "fund_id"
+          data_type: "varchar"
+          nullable: false
+          description: "Canonical fund identifier"
+        - source_field: "legal_name"
+          target_field: "legal_name"
+          data_type: "varchar"
+          description: "Fund legal name from administrator"
+        - source_field: "domicile"
+          target_field: "domicile"
+          data_type: "varchar"
+          description: "Fund domicile jurisdiction"
+        - source_field: "fund_structure"
+          target_field: "fund_structure"
+          data_type: "varchar"
+          description: "Legal structure (LP, LLC, etc.)"
+        - source_field: "inception_date"
+          target_field: "inception_date"
+          data_type: "date"
+          description: "Fund inception date"
+        - source_field: "strategy_code"
+          target_field: "strategy_code"
+          data_type: "varchar"
+          description: "Strategy classification code (for enrichment)"
+        - source_field: "currency"
+          target_field: "currency"
+          data_type: "varchar"
+          description: "Fund base currency (ISO 4217)"
+        - source_field: "committed_capital_mm"
+          target_field: "committed_capital_mm"
+          data_type: "decimal(18,4)"
+          description: "Committed capital per administrator"
+        - source_field: "administrator_name"
+          target_field: "administrator_name"
+          data_type: "varchar"
+          description: "Fund administrator name"
+      drop_fields: ["last_updated"]
+
+  # CALCULATED FIELDS
+
+  - pattern: "calculated_fields"
+    config:
+      apply_mode: "inline"
+      fields:
+        - name: "is_active"
+          expression: "CASE WHEN nav_mm > 0 OR called_capital_mm < committed_capital_mm THEN true ELSE false END"
+          data_type: "boolean"
+          description: "Whether the fund is currently active (has NAV or uncalled capital)"
+        - name: "fund_age_years"
+          expression: "DATE_PART('year', AGE(CURRENT_DATE, inception_date))"
+          data_type: "integer"
+          description: "Fund age in whole years from inception"
+          nullable: true
+        - name: "tvpi"
+          expression: "ROUND((nav_mm + distributed_mm) / NULLIF(called_capital_mm, 0), 4)"
+          data_type: "decimal(18,4)"
+          description: "Total Value to Paid-In ratio (TVPI = (NAV + Distributions) / Called)"
+          nullable: true
+        - name: "dpi"
+          expression: "ROUND(distributed_mm / NULLIF(called_capital_mm, 0), 4)"
+          data_type: "decimal(18,4)"
+          description: "Distributions to Paid-In ratio (DPI = Distributions / Called)"
+          nullable: true
+        - name: "unfunded_commitment_mm"
+          expression: "committed_capital_mm - called_capital_mm"
+          data_type: "decimal(18,4)"
+          description: "Remaining unfunded commitment in millions"
+      rule_version: "2026Q1"
+      rule_owner: "investment-data-team"
+
+  # ENRICHMENT
+
+  - pattern: "data_enrichment"
+    config:
+      apply_mode: "inline"
+      enrichments:
+        - name: "strategy_lookup"
+          reference_model: "ref('dim_fund_strategies')"
+          join_type: "left"
+          join_keys:
+            - source_field: "strategy_code"
+              reference_field: "strategy_code"
+          fields:
+            - source_field: "strategy_name"
+              target_field: "strategy_name"
+              description: "Canonical strategy name from reference"
+            - source_field: "asset_class"
+              target_field: "asset_class"
+              description: "Asset class classification"
+            - source_field: "strategy_group"
+              target_field: "strategy_group"
+              description: "High-level strategy grouping"
+          fallback:
+            strategy: "warn"
+            warn_flag_column: "strategy_lookup_missing"
+
+        - name: "currency_lookup"
+          reference_model: "ref('dim_currencies')"
+          join_type: "left"
+          join_keys:
+            - source_field: "currency"
+              reference_field: "currency_code"
+          fields:
+            - source_field: "currency_name"
+              target_field: "currency_name"
+              description: "Full currency name"
+            - source_field: "usd_fx_rate"
+              target_field: "usd_fx_rate"
+              description: "Exchange rate to USD"
+          fallback:
+            strategy: "default"
+            default_values:
+              - field: "currency_name"
+                value: "'Unknown'"
+              - field: "usd_fx_rate"
+                value: "1.0"
+
+  # FILTERING
+
+  - pattern: "data_filtering"
+    config:
+      apply_mode: "inline"
+      filters:
+        - name: "exclude_test_funds"
+          predicate: "fund_id NOT LIKE 'TEST%'"
+          description: "Exclude test/dummy funds created during system setup"
+          severity: "exclude"
+        - name: "exclude_pre_cutover"
+          predicate: "vintage_year >= 2000"
+          description: "Exclude legacy funds before platform cutover - data quality is unreliable"
+          severity: "exclude"
+        - name: "flag_zero_commitment"
+          predicate: "committed_capital_mm > 0"
+          description: "Flag funds with zero committed capital - may indicate data entry error"
+          severity: "flag"
+      audit:
+        log_counts: true
+        flag_column: "has_data_quality_flag"
+        flag_detail_column: "data_quality_flag_reason"
+
+  # CURATION (entity resolution)
+
+  - pattern: "data_curation"
+    config:
+      entity_key: "fund_id"
+      resolution_strategy: "deterministic"
+      match_keys:
+        - source: "int_fund_master_mapped_gp"
+          keys: ["fund_id"]
+          priority: 1
+        - source: "int_fund_master_mapped_admin"
+          keys: ["fund_id"]
+          priority: 2
+      survivorship:
+        default_priority: ["int_fund_master_mapped_gp", "int_fund_master_mapped_admin"]
+        field_overrides:
+          - field: "legal_name"
+            priority: ["int_fund_master_mapped_admin", "int_fund_master_mapped_gp"]
+            rule: "first_non_null"
+          - field: "domicile"
+            priority: ["int_fund_master_mapped_admin"]
+            rule: "source_priority"
+          - field: "fund_structure"
+            priority: ["int_fund_master_mapped_admin"]
+            rule: "source_priority"
+          - field: "inception_date"
+            priority: ["int_fund_master_mapped_admin", "int_fund_master_mapped_gp"]
+            rule: "first_non_null"
+          - field: "administrator_name"
+            priority: ["int_fund_master_mapped_admin"]
+            rule: "source_priority"
+          - field: "committed_capital_mm"
+            priority: ["int_fund_master_mapped_gp", "int_fund_master_mapped_admin"]
+            rule: "first_non_null"
+
+  # POST-VALIDATION
+
+  - pattern: "data_validation"
+    stage: "post"
+    config:
+      rules:
+        - field: "fund_id"
+          type: "uniqueness"
+          severity: "error"
+          description: "Fund ID must be unique in the foundation model (one golden record per fund)"
+        - field: "fund_id"
+          type: "completeness"
+          severity: "error"
+          description: "Fund ID must never be null"
+        - field: "fund_name"
+          type: "completeness"
+          severity: "warn"
+          threshold: 0.95
+          description: "Fund name should be at least 95% complete"
+        - field: "strategy"
+          type: "completeness"
+          severity: "warn"
+          threshold: 0.90
+          description: "Strategy should be at least 90% complete"
+        - field: "committed_capital_mm"
+          type: "range"
+          severity: "error"
+          description: "Committed capital must be positive"
+          params:
+            min: 0
+        - type: "consistency"
+          severity: "error"
+          description: "TVPI must be non-negative when calculated"
+          params:
+            expression: "tvpi IS NULL OR tvpi >= 0"
+        - type: "consistency"
+          severity: "error"
+          description: "Called capital must not exceed committed capital"
+          params:
+            expression: "called_capital_mm <= committed_capital_mm + 0.01"
+      quarantine:
+        enabled: true
+        quarantine_model: "int_fund_master_quarantine"
+        error_threshold: 0.01
+        warn_threshold: 0.05
+
+  # CONTRACT
+
+  - pattern: "data_contracts"
+    config:
+      contract_enforced: true
+      description: >
+        Foundation fund master - the canonical fund entity for downstream consumption.
+        One record per fund. Contract-enforced schema. Breaking changes require version increment.
+      columns:
+        - name: "fund_id"
+          data_type: "varchar"
+          description: "Canonical fund identifier - unique, non-null"
+          constraints:
+            - type: "primary_key"
+          meta:
+            pii: false
+            source_system: "gp_quarterly_report, admin_fund_data"
+        - name: "fund_name"
+          data_type: "varchar"
+          description: "Fund name as reported by the GP"
+          meta:
+            source_system: "gp_quarterly_report"
+        - name: "legal_name"
+          data_type: "varchar"
+          description: "Fund legal name from administrator"
+          meta:
+            source_system: "admin_fund_data"
+        - name: "gp_name"
+          data_type: "varchar"
+          description: "General partner name"
+        - name: "strategy"
+          data_type: "varchar"
+          description: "Investment strategy"
+        - name: "strategy_name"
+          data_type: "varchar"
+          description: "Canonical strategy name from reference"
+        - name: "asset_class"
+          data_type: "varchar"
+          description: "Asset class classification"
+        - name: "strategy_group"
+          data_type: "varchar"
+          description: "High-level strategy grouping"
+        - name: "vintage_year"
+          data_type: "integer"
+          description: "Fund vintage year"
+          constraints:
+            - type: "check"
+              expression: "vintage_year >= 1990 AND vintage_year <= 2030"
+        - name: "currency"
+          data_type: "varchar"
+          description: "Fund base currency (ISO 4217)"
+          constraints:
+            - type: "not_null"
+        - name: "currency_name"
+          data_type: "varchar"
+          description: "Full currency name"
+        - name: "domicile"
+          data_type: "varchar"
+          description: "Fund domicile jurisdiction"
+        - name: "fund_structure"
+          data_type: "varchar"
+          description: "Legal structure (LP, LLC, etc.)"
+        - name: "inception_date"
+          data_type: "date"
+          description: "Fund inception date"
+        - name: "administrator_name"
+          data_type: "varchar"
+          description: "Fund administrator name"
+        - name: "committed_capital_mm"
+          data_type: "decimal(18,4)"
+          description: "Total committed capital in millions"
+          constraints:
+            - type: "not_null"
+        - name: "called_capital_mm"
+          data_type: "decimal(18,4)"
+          description: "Capital called to date in millions"
+        - name: "nav_mm"
+          data_type: "decimal(18,4)"
+          description: "Net asset value in millions"
+        - name: "distributed_mm"
+          data_type: "decimal(18,4)"
+          description: "Distributions to date in millions"
+        - name: "tvpi"
+          data_type: "decimal(18,4)"
+          description: "Total Value to Paid-In ratio"
+        - name: "dpi"
+          data_type: "decimal(18,4)"
+          description: "Distributions to Paid-In ratio"
+        - name: "unfunded_commitment_mm"
+          data_type: "decimal(18,4)"
+          description: "Remaining unfunded commitment in millions"
+        - name: "is_active"
+          data_type: "boolean"
+          description: "Whether the fund is currently active"
+        - name: "fund_age_years"
+          data_type: "integer"
+          description: "Fund age in whole years from inception"
+        - name: "reporting_quarter"
+          data_type: "varchar"
+          description: "Most recent reporting period"
+        - name: "report_date"
+          data_type: "date"
+          description: "Date of the most recent GP report"
+        - name: "usd_fx_rate"
+          data_type: "decimal(18,4)"
+          description: "Exchange rate to USD"
+        - name: "has_data_quality_flag"
+          data_type: "boolean"
+          description: "Whether this record has a data quality flag"
+        - name: "data_quality_flag_reason"
+          data_type: "varchar"
+          description: "Reason for data quality flag (null if no flag)"
+        - name: "strategy_lookup_missing"
+          data_type: "boolean"
+          description: "Whether the strategy lookup failed"
+
+  # LINEAGE, METADATA, PUBLISH
+
+  - pattern: "lineage_capture"
+    config:
+      generate_mapping_doc: true
+      include_field_lineage: true
+
+  - pattern: "metadata_capture"
+    config:
+      meta_tags:
+        domain: "investments"
+        owner: "investment-data-team"
+        tier: "tier1"
+        pii_contains: false
+        sla: "daily by 06:00 UTC"
+
+  - pattern: "schema_publish"
+    config:
+      access: "public"
+      version: 1
+      generate_version_manifest: false
+
+  - pattern: "data_publish"
+    config:
+      build_command_guidance: true
+      access_controls:
+        roles: ["analyst_role", "portfolio_manager_role"]
+        notes: "Available to all investment analytics consumers"
+      post_hook: "GRANT SELECT ON {{ this }} TO ROLE analyst_role"
+
+checkpointing:
+  enabled: true
+  strategy: "incremental"
+  incremental:
+    unique_key: "fund_id"
+    strategy: "merge"
+    on_schema_change: "append_new_columns"
+    incremental_predicates:
+      - "report_date >= dateadd(month, -6, current_date)"
+  retry:
+    max_retries: 3
+    backoff: "exponential"
+    notes: "Use dbt retry to re-run failed nodes. Pipeline is idempotent."
