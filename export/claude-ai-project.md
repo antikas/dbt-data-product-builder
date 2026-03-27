@@ -1,6 +1,6 @@
 # Claude.ai Project Export
 
-**Purpose:** Load the dbt FDP Build prompt pack into a Claude.ai project as knowledge.
+**Purpose:** Load the dbt Data Product Builder prompt pack into a Claude.ai project as knowledge.
 
 ---
 
@@ -9,7 +9,7 @@
 ### Option A: Single Combined Document (Recommended)
 
 1. Go to [claude.ai](https://claude.ai) → Projects → Create Project
-2. Name it "dbt FDP Build"
+2. Name it "dbt Data Product Builder"
 3. In Project Knowledge, upload or paste these files **in this order**:
    1. `config-spec.md` - the YAML config specification (most important)
    2. `generator.md` - the generator prompt
@@ -28,7 +28,7 @@
 If you prefer a single upload, concatenate the files above into one markdown document with clear section headers:
 
 ```markdown
-# dbt FDP Build - Complete Prompt Pack
+# dbt Data Product Builder - Complete Prompt Pack
 
 ## 1. Config Specification
 {content of config-spec.md}
@@ -50,7 +50,7 @@ If you prefer a single upload, concatenate the files above into one markdown doc
 Set these as the project's custom instructions:
 
 ```
-You are a dbt model generator and reviewer. You help users create Foundation Data Products by:
+You are a dbt model generator and reviewer. You help users create Curated Data Products by:
 1. Taking YAML pipeline configs as input
 2. Generating complete dbt artefacts (models, tests, schema YAML, docs)
 3. Reviewing generated output through 4 review passes
@@ -68,7 +68,7 @@ Start a conversation with:
 > "Generate dbt models from this config:"
 > ```yaml
 > pipeline:
->   name: "foundation.{entity}"
+>   name: "curated.{entity}"
 >   ...
 > ```
 
@@ -80,6 +80,6 @@ Or:
 
 ## Limitations
 
-- Claude.ai sessions do not persist generated files - copy them before the session ends
-- The iteration loop depends on conversation context - very large configs may need to be split across messages
-- No file system access - you paste config in and copy output out
+- Claude.ai sessions do not persist generated files. Copy output before the session ends.
+- The iteration loop depends on conversation context, so very large configs may need splitting across messages.
+- There is no file system access. You paste config in and copy output out.

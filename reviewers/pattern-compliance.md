@@ -31,7 +31,7 @@ For every step in the config's `steps:` array, verify a corresponding artefact e
 | `data_validation - post` | Tests in schema YAML | ERROR: Post-validation tests missing |
 | `data_aggregation` | `int_{entity}_aggregated.sql` model | ERROR: Aggregation model missing |
 | `data_curation` | `int_{entity}_curated.sql` model | ERROR: Curation model missing |
-| `data_contracts` | Contract config in foundation schema YAML | ERROR: Contract not enforced |
+| `data_contracts` | Contract config in curated model schema YAML | ERROR: Contract not enforced |
 | `lineage_capture` | Config-model mapping doc | WARNING: Mapping doc not generated |
 | `metadata_capture` | `meta:` tags in schema YAML | WARNING: Meta tags missing |
 | `schema_publish` | `access:` in schema YAML | WARNING: Access modifier missing |
@@ -154,7 +154,7 @@ For quarantine (if enabled):
 
 #### 9. Data Contract Completeness
 
-- [ ] `contract: { enforced: true }` in foundation model config (if configured)
+- [ ] `contract: { enforced: true }` in curated model config (if configured)
 - [ ] Every column in `data_contracts.config.columns` appears in schema YAML
 - [ ] Data types match
 - [ ] Constraints are declared
@@ -164,7 +164,7 @@ For quarantine (if enabled):
 
 #### 10. Checkpointing Compliance
 
-- [ ] If strategy is "incremental", foundation model uses incremental materialisation
+- [ ] If strategy is "incremental", curated model uses incremental materialisation
 - [ ] unique_key matches config
 - [ ] incremental_strategy matches config
 - [ ] on_schema_change matches config
@@ -185,7 +185,7 @@ Check for:
 - dbt naming conventions or style (Reviewer 1)
 - Contract column completeness independent of config (Reviewer 3)
 - Business logic duplication (Reviewer 4)
-- Whether the business rules are correct (config author's responsibility)
+- Business rule correctness (config author's responsibility)
 
 ### Output Format
 

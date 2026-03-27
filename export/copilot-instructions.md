@@ -1,6 +1,6 @@
 # GitHub Copilot Export
 
-**Purpose:** Package the dbt FDP Build generator as GitHub Copilot custom instructions.
+**Purpose:** Package the dbt Data Product Builder generator as GitHub Copilot custom instructions.
 
 ---
 
@@ -15,15 +15,15 @@
 ## File: `.github/copilot-instructions.md`
 
 ```markdown
-# dbt Foundation Data Product Conventions
+# dbt Curated Data Product Conventions
 
-This project uses declarative pipeline configuration to generate dbt Foundation Data Products. Follow these conventions when generating or modifying dbt models.
+This project uses declarative pipeline configuration to generate dbt Curated Data Products. Follow these conventions when generating or modifying dbt models.
 
 ## Model Naming
 
 - Staging: `stg_{source_name}.sql`
 - Intermediate: `int_{entity}_{verb}.sql` (e.g., `int_fund_master_mapped.sql`)
-- Foundation: `fnd_{entity}.sql`
+- Curated: `cur_{entity}.sql`
 - Quarantine: `int_{entity}_quarantine.sql`
 
 ## SQL Structure
@@ -72,7 +72,7 @@ Map source fields to canonical model:
 
 ## Contracts
 
-Foundation models use `contract: { enforced: true }`:
+Curated models use `contract: { enforced: true }`:
 - Every column has explicit `data_type`
 - Column order matches the contract
 - `meta` tags for PII, sensitivity, ownership
@@ -80,7 +80,7 @@ Foundation models use `contract: { enforced: true }`:
 ## Materialisation Defaults
 
 - Intermediate: `view` (lightweight, recomputed)
-- Foundation: `table` (consumed by many downstream)
+- Curated: `table` (consumed by many downstream)
 - Aggregation: `table` (expensive to recompute)
 - Quarantine: `table` (persists for investigation)
 
@@ -95,11 +95,10 @@ Foundation models use `contract: { enforced: true }`:
 
 ## Limitations
 
-GitHub Copilot cannot:
-- Run the full generate-review-iterate loop (use Claude Code for that)
-- Validate YAML configs against the schema
-- Run multiple review passes
-
-The Copilot instructions provide conventions only. Copilot will reference them when you write or edit dbt models, but it will not orchestrate the full workflow.
+Copilot applies conventions when you write or edit dbt models, but it cannot orchestrate the full workflow:
+- It will not run the generate-review-iterate loop
+- It will not validate YAML configs against the schema
+- It will not run multiple review passes
+- It has no mechanism for iterative error resolution
 
 For the full generation + review pipeline, use the Claude Code skill or Claude.ai project exports.

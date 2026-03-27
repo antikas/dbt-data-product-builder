@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A complete prompt-based system for generating production-ready dbt models from declarative YAML pipeline configurations. Targets the **Foundation Base (silver/FDP build) layer**: the transformation from staging to curated, entity-centric data products.
+A complete prompt-based system for generating production-ready dbt models from declarative YAML pipeline configurations. Targets the **Curated Base (silver/curated build) layer**: the transformation from staging to curated, entity-centric data products.
 
 Built on the principle that every field mapping, quality rule, enrichment join, and contract column is something you must know to build the pipeline correctly, regardless of technology. The declarative config captures that knowledge explicitly rather than burying it in SQL.
 
@@ -14,15 +14,16 @@ Built on the principle that every field mapping, quality rule, enrichment join, 
 
 The sources, business rules, quality thresholds, and data contracts that define a data product change far less frequently than the technology used to execute them. Business rules evolve quarterly. Platforms change on multi-year cycles - and when they change, the change is total.
 
-This asymmetry is the reason declarative pipeline configuration exists. If business logic is captured in config (engine-agnostic, vendor-neutral), then a technology migration is a framework concern. The business logic, quality rules, and contracts do not change. Migration becomes a one-time effort on the translator, not a per-pipeline recode.
+The asymmetry explains why declarative pipeline configuration exists. If business logic is captured in config (engine-agnostic, vendor-neutral), then a technology migration is a framework concern. The business logic, quality rules, and contracts do not change. Migration becomes a one-time effort on the translator, not a per-pipeline recode.
 
-### Metaprogramming, Not Hand-Crafted SQL
+### Metaprogramming Over Hand-Crafted SQL
 
-Traditional dbt projects require teams to hand-write SQL models, tests, and documentation for every data product. This works, but it has scaling problems:
+Traditional dbt projects require teams to hand-write SQL models, tests, and documentation for every data product. The approach works, but it has scaling problems:
 
-- **Inconsistency.** Different engineers write different patterns for the same transformation type. One team uses CTEs, another uses subqueries. One team tests primary keys, another doesn't.
-- **Boilerplate.** 80% of a Foundation model is structural: field mapping, type casting, joins to reference tables, standard tests. Only 20% is unique business logic.
-- **Drift.** Documentation diverges from code. Tests don't cover what the contract promises. Schema YAML describes fields that no longer exist.
+- **Inconsistency** across engineers: different patterns for the same transformation type. One team uses CTEs, another uses subqueries. One team tests primary keys, another doesn't.
+- **Boilerplate** dominates: 80% of a curated model is structural (field mapping, type casting, joins to reference tables, standard tests). Only 20% is unique business logic.
+- **Drift** between artefacts: documentation diverges from code, tests don't cover what the contract promises, and schema YAML describes fields that no longer exist.
+- **Onboarding friction:** new engineers must reverse-engineer existing models to understand which patterns are in use and which are missing.
 
 The prompt pack solves this by treating dbt models as **generated artefacts from a specification**:
 
@@ -38,7 +39,7 @@ The YAML config is the source of truth. The generated dbt code is disposable - i
 
 ### Composable Building-Block Patterns
 
-Every Foundation Data Product is assembled from the same set of transformation patterns, composed in a defined order:
+Every Curated Data Product is assembled from the same set of transformation patterns, composed in a defined order:
 
 ```
 Source Tables
@@ -65,7 +66,7 @@ Data Validation ──► Quality checks, quarantine bad records
 Data Contracts ──► Enforce published schema for consumers
      │
      ▼
-Foundation Data Product (published, consumed by downstream)
+Curated Data Product (published, consumed by downstream)
 ```
 
 The value is in the **composition model**: knowing which patterns go together, in what order, and what configuration each needs.
@@ -96,7 +97,7 @@ The value is in the **composition model**: knowing which patterns go together, i
 ## Prerequisites
 
 1. **A dbt project** with a working connection to your data warehouse (Snowflake, BigQuery, Databricks, PostgreSQL, DuckDB, etc.)
-2. **Staging models** already built - the prompt pack generates Foundation (intermediate) and above, not staging
+2. **Staging models** already built - the prompt pack generates curated (intermediate) and above, not staging
 3. **An AI assistant** - Claude (Code or .ai), GitHub Copilot, or any LLM that accepts markdown prompts
 4. **Understanding of your data** - you need to know your source fields, business rules, and quality requirements to write the YAML config
 
@@ -112,13 +113,13 @@ Create a YAML file following the schema in [config-spec.md](config-spec.md). Sta
 
 Pass the generator prompt ([generator.md](generator.md)) and your config to your AI assistant:
 
-> "Using the dbt FDP Build generator prompt, generate dbt models from this config: [paste config]"
+> "Using the dbt Data Product Builder generator prompt, generate dbt models from this config: [paste config]"
 
 ### Step 3: Review the Output
 
 Run the orchestrator ([orchestrator.md](orchestrator.md)) to review the generated artefacts through four review passes:
 
-> "Using the dbt FDP Build orchestrator, review these generated artefacts against the config: [paste config and output]"
+> "Using the dbt Data Product Builder orchestrator, review these generated artefacts against the config: [paste config and output]"
 
 ### Step 4: Copy to Your Project
 
@@ -129,7 +130,7 @@ Copy the generated files into your dbt project directory.
 ```bash
 dbt deps                              # Install required packages
 dbt compile                            # Verify SQL compiles
-dbt build --select fnd_{entity}+       # Build and test
+dbt build --select cur_{entity}+       # Build and test
 dbt docs generate && dbt docs serve    # Verify documentation
 ```
 
@@ -143,8 +144,8 @@ The config uses the exact schema from the Data Product Framework, expanded with 
 
 ```yaml
 pipeline:        # Product identity, dbt-specific settings
-  name: "foundation.{entity}"
-  product_type: "foundation-base"
+  name: "curated.{entity}"
+  product_type: "curated-base"
   dbt:           # target_schema, model_prefix, materialisation, tags
 
 steps:           # Ordered pattern sequence
@@ -180,9 +181,9 @@ The generator ([generator.md](generator.md)) takes your YAML config and produces
 | `_sources.yml` | Source definitions from batch_transfer |
 | `int_{entity}_mapped.sql` | Schema transform model(s) |
 | `int_{entity}_curated.sql` | Entity resolution model (if multi-source) |
-| `fnd_{entity}.sql` | Final foundation model with contract |
+| `cur_{entity}.sql` | Final curated model with contract |
 | `_int_{entity}__models.yml` | Intermediate schema with tests |
-| `_fnd_{entity}__models.yml` | Foundation schema with contract, meta, access |
+| `_cur_{entity}__models.yml` | Curated schema with contract, meta, access |
 | Singular test files | Custom SQL tests from validation rules |
 | Quarantine model | Failed records (if quarantine enabled) |
 | Config-model mapping | Lineage document tracing config to models |
@@ -221,7 +222,7 @@ Generate → Review 1 → Review 2 → Review 3 → Review 4 → Done
 
 ### Investment Domain - Fund Master
 
-A multi-source FDP with GP reports and administrator data, entity resolution, enrichment, quarantine, and incremental strategy.
+A multi-source CDP with GP reports and administrator data, entity resolution, enrichment, quarantine, and incremental strategy.
 
 - [Config](examples/investment/config.yml) - full YAML config with all patterns
 - [Expected Output](examples/investment/expected-output.md) - all generated dbt artefacts
@@ -229,7 +230,7 @@ A multi-source FDP with GP reports and administrator data, entity resolution, en
 
 ### Customer/Orders Domain - Customer
 
-A simpler FDP with CRM and billing sources, full refresh, no quarantine. Demonstrates PII tagging and protected access.
+A simpler CDP with CRM and billing sources, full refresh, no quarantine. Includes PII tagging and protected access.
 
 - [Config](examples/customer-orders/config.yml) - YAML config
 - [Expected Output](examples/customer-orders/expected-output.md) - generated artefacts
@@ -248,13 +249,13 @@ your_dbt_project/
 ├── models/
 │   ├── sources/     ← _sources.yml
 │   ├── intermediate/ ← int_*.sql, _int_*__models.yml
-│   └── foundation/  ← fnd_*.sql, _fnd_*__models.yml
+│   └── curated/  ← cur_*.sql, _cur_*__models.yml
 ├── tests/singular/  ← assert_*.sql
 ├── macros/          ← quarantine_*.sql (if applicable)
 └── docs/            ← config_model_mapping_*.md
 ```
 
-If your project uses different directory names (e.g., `marts/` instead of `foundation/`), adjust the paths accordingly. The generator adapts to your conventions when you provide your `dbt_project.yml`.
+If your project uses different directory names (e.g., `marts/` instead of `curated/`), adjust the paths accordingly. The generator adapts to your conventions when you provide your `dbt_project.yml`.
 
 ### Running the Models
 
@@ -263,13 +264,13 @@ If your project uses different directory names (e.g., `marts/` instead of `found
 dbt deps
 
 # Full build (models + tests)
-dbt build --select fnd_{entity}+
+dbt build --select cur_{entity}+
 
 # Just the models (skip tests)
-dbt run --select fnd_{entity}+
+dbt run --select cur_{entity}+
 
 # Just the tests
-dbt test --select fnd_{entity}
+dbt test --select cur_{entity}
 
 # Source freshness check (if configured)
 dbt source freshness
@@ -295,12 +296,12 @@ Do not hand-edit generated models to add business logic. Instead:
 
 If you must hand-edit (e.g., a warehouse-specific optimisation), document it in the model header. Be aware that regeneration will overwrite your edit.
 
-### Extending Beyond Foundation Base
+### Extending Beyond Curated Base
 
-This prompt pack covers Foundation Base. For other layers:
+The prompt pack covers Curated Base. For other layers:
 
 - **Staging:** Not generated - you write staging models by hand or with dbt codegen
-- **Foundation Feature (2b):** Uses the same patterns plus `data_aggregation`. Extend the config with aggregation steps.
+- **Feature (2b):** Uses the same patterns plus `data_aggregation`. Extend the config with aggregation steps.
 - **Consumption (marts):** Purpose-built for specific consumers. Often hand-written since they're domain-specific.
 
 ---
@@ -319,7 +320,7 @@ The SSOT is always the markdown files in this directory. Exports are views - nev
 
 ## Relationship to the Data Product Framework
 
-This prompt pack implements the concepts from the [Data Product Framework](reference/data-product-framework.md) for dbt specifically. The framework is platform-agnostic (Python meta-layer with target translators); this pack is the dbt translation.
+The prompt pack implements the concepts from the [Data Product Framework](reference/data-product-framework.md) for dbt specifically. The framework is platform-agnostic (Python meta-layer with target translators). The pack is the dbt translation.
 
 | Framework Concept | Prompt Pack Implementation |
 |-------------------|---------------------------|

@@ -1,24 +1,24 @@
 # Pipeline Building Blocks
 
-**Created:** 2026-03-07 (rebuilt from Dec 2024 discussions — "Documenting Data Pipeline Design Patterns")
+**Created:** 2026-03-07 (rebuilt from Dec 2024 discussions, "Documenting Data Pipeline Design Patterns")
 **Status:** Active
-**Nature:** Pure logical architecture — platform and technology agnostic
+**Nature:** Pure logical architecture, platform and technology agnostic
 **Related:** [data-product-framework.md](data-product-framework.md)
 
 ---
 
 ## Overview
 
-A data product pipeline is not a monolith. It is a composition of discrete, reusable building blocks — each solving one specific problem. This catalog documents 15 such patterns. Any given data product pipeline is assembled from a subset of these, combined in a defined order.
+A data product pipeline is a composition of discrete, reusable building blocks, each solving one specific problem. This catalog documents 15 such patterns. Any given pipeline is assembled from a subset of these, combined in a defined order.
 
-The value of the catalog is not the individual patterns (each is fairly obvious in isolation) but the **composition model**: knowing which patterns go together, in what order, and for what product type. That is what makes a config-driven framework possible — the framework encodes the compositions; teams supply the configuration.
+The value of the catalog is the **composition model**: knowing which patterns go together, in what order, and for what product type. Individual patterns are straightforward in isolation. The composition model is what makes a config-driven framework possible. The framework encodes the compositions; teams supply the configuration.
 
 ---
 
 ## The 15 Building-Block Patterns
 
 ### 1. Batch Ingestion
-**Problem:** How do you bring data from a source system into the data platform in a controlled, repeatable way for bounded (non-streaming) data?
+**Problem:** Bringing data from a source system into the data platform in a controlled, repeatable way for bounded (non-streaming) data.
 
 **Solution:** Extract a defined scope of records from the source on a schedule, land them in the origin layer with metadata attached, and track what was extracted vs. what arrived.
 
@@ -30,28 +30,28 @@ The value of the catalog is not the individual patterns (each is fairly obvious 
 
 **When to use:** Any structured source, scheduled refresh cadence, tolerable latency measured in minutes to hours.
 
-**Anti-pattern:** Extracting from operational source systems without a read replica or export mechanism — you will degrade source performance.
+**Anti-pattern:** Extracting from operational source systems without a read replica or export mechanism. You will degrade source performance.
 
 ---
 
 ### 2. Batch Transfer
-**Problem:** How do you move data between layers of the platform, or between platform zones, without re-ingesting from the original source?
+**Problem:** Moving data between layers of the platform, or between platform zones, without re-ingesting from the original source.
 
 **Solution:** Transfer a partition or snapshot from one internal location to another, preserving provenance metadata. This is internal data movement, not external ingestion.
 
 **Key decisions:**
 - Copy (preserve origin, create new partition) vs. move (single authoritative copy)
-- Whether transformation is allowed during transfer (prefer: no — keep transfer pure)
+- Whether transformation is allowed during transfer (prefer no, keep transfer pure)
 - Metadata continuity: the transferred copy must carry forward source lineage
 
-**When to use:** Promoting data from origin to a staging zone; replicating a foundation product to a serving layer with different latency or access characteristics.
+**When to use:** Promoting data from origin to a staging zone; replicating a curated product to a serving layer with different latency or access characteristics.
 
 **Distinction from Batch Ingestion:** Ingestion is source → platform. Transfer is platform zone → platform zone.
 
 ---
 
 ### 3. Schema Transform
-**Problem:** Source system schemas rarely match the enterprise canonical model. How do you make a principled, auditable mapping from source schema to target schema?
+**Problem:** Source system schemas rarely match the enterprise canonical model. A principled, auditable mapping from source schema to target schema is needed.
 
 **Solution:** Apply a declarative field mapping that converts source field names, types, and structures to the target schema. The mapping is configuration, not bespoke code.
 
@@ -62,14 +62,14 @@ The value of the catalog is not the individual patterns (each is fairly obvious 
 - Null handling (propagate null vs. substitute default)
 - Dropping source fields not needed in the target layer
 
-**What it does not cover:** Business logic. If you are computing derived values, that is Calculated Fields. If you are joining to a reference table to resolve a code, that is Data Enrichment. Schema Transform is pure structural mapping — no logic.
+**What it does not cover:** Business logic. If you are computing derived values, that is Calculated Fields. If you are joining to a reference table to resolve a code, that is Data Enrichment. Schema Transform is pure structural mapping with no logic.
 
 **Implementation:** A schema mapping config file (YAML or equivalent) consumed by the framework. Not hand-coded transformation logic.
 
 ---
 
 ### 4. Calculated Fields
-**Problem:** Many downstream fields are not delivered by the source but must be derived — computed from one or more source fields using business rules.
+**Problem:** Many downstream fields are not delivered by the source but must be derived, computed from one or more source fields using business rules.
 
 **Solution:** Apply business rule expressions to input records to produce new derived fields. Rules are externalised as configuration or a rule file, not embedded in pipeline code.
 
@@ -79,7 +79,7 @@ The value of the catalog is not the individual patterns (each is fairly obvious 
 - `transaction_quarter = DATE_TRUNC('quarter', transaction_date)`
 - `risk_band = CASE WHEN score > 800 THEN 'low' WHEN score > 600 THEN 'medium' ELSE 'high' END`
 
-**Key discipline:** Calculated fields should be idempotent — given the same input record, they always produce the same output. No lookups, no joins, no external calls. For anything requiring a reference table, use Data Enrichment.
+**Key discipline:** Calculated fields should be idempotent. Given the same input record, they always produce the same output. No lookups, no joins, no external calls. For anything requiring a reference table, use Data Enrichment.
 
 **Versioning:** Business rules change. The rule version must be captured in pipeline metadata so historical records can be recomputed when rules change.
 
@@ -88,7 +88,7 @@ The value of the catalog is not the individual patterns (each is fairly obvious 
 ### 5. Data Enrichment / Lookups
 **Problem:** Source records carry codes or keys that need to be resolved to human-readable values, or enriched with attributes from reference data.
 
-**Solution:** Join incoming records against a reference dataset to add or decode attributes. The reference dataset is itself a governed data product (typically a foundation layer reference product).
+**Solution:** Join incoming records against a reference dataset to add or decode attributes. The reference dataset is itself a governed data product (typically a curated layer reference product).
 
 **Examples:**
 - Resolve a country code to country name and region
@@ -106,9 +106,9 @@ The value of the catalog is not the individual patterns (each is fairly obvious 
 ---
 
 ### 6. Data Filtering
-**Problem:** Not all records from a source are relevant to a given data product. How do you exclude irrelevant, invalid, or out-of-scope records in a documented, auditable way?
+**Problem:** Not all records from a source are relevant to a given data product. Irrelevant, invalid, or out-of-scope records need to be excluded in a documented, auditable way.
 
-**Solution:** Apply explicit filter predicates as configuration. Records that do not pass filters are not silently dropped — they are routed to a filter log so the decision is auditable.
+**Solution:** Apply explicit filter predicates as configuration. Records that do not pass filters are routed to a filter log so the decision is auditable, never silently dropped.
 
 **Examples:**
 - Include only records from specific business units
@@ -116,14 +116,14 @@ The value of the catalog is not the individual patterns (each is fairly obvious 
 - Include only transactions in a defined currency set
 - Exclude records before a platform cutover date
 
-**The audit requirement:** Filtering must be transparent. "We have 10 million source records but only 8 million in the product" must be answerable by consulting the filter log — what predicates were applied, how many records matched each, and why.
+**The audit requirement:** Filtering must be transparent. "We have 10 million source records but only 8 million in the product" must be answerable by consulting the filter log: what predicates were applied, how many records matched each, and why.
 
 **Anti-pattern:** Filtering embedded silently in SQL WHERE clauses without documentation. When the filter logic is wrong (and it will be), there is no way to audit what was excluded.
 
 ---
 
 ### 7. Data Validation
-**Problem:** How do you detect and handle data that violates expected quality constraints before it contaminates downstream products?
+**Problem:** Detecting and handling data that violates expected quality constraints before it contaminates downstream products.
 
 **Solution:** Apply a set of validation rules against incoming data. Records (or batches) that fail rules are quarantined, not silently passed through. Failures generate alerts.
 
@@ -139,14 +139,14 @@ The value of the catalog is not the individual patterns (each is fairly obvious 
 | **Distribution** | Record count within ±20% of 30-day rolling average |
 | **Consistency** | `end_date >= start_date` always |
 
-**Quarantine model:** Failed records are routed to a quarantine zone with the failing rule, the record content, and a timestamp. They are not lost — they are held for investigation and reprocessing. The main pipeline continues with passing records (unless failure rate exceeds the threshold, in which case the pipeline aborts).
+**Quarantine model:** Failed records are routed to a quarantine zone with the failing rule, the record content, and a timestamp. They are held for investigation and reprocessing. The main pipeline continues with passing records (unless failure rate exceeds the threshold, in which case the pipeline aborts).
 
 **Threshold vs. abort:** Define a maximum acceptable failure rate per product. Below threshold: quarantine and continue. Above threshold: abort the run, do not publish partial data, alert.
 
 ---
 
 ### 8. Data Aggregation
-**Problem:** Foundation and consumption products often need pre-computed summaries, not row-level detail. How do you produce aggregates that are correct, reproducible, and maintainable?
+**Problem:** Curated and consumption products often need pre-computed summaries rather than row-level detail. Aggregates must be correct, reproducible, and maintainable.
 
 **Solution:** Apply grouping and aggregation expressions as a configuration-driven step, operating on validated data. Aggregation logic is versioned.
 
@@ -166,7 +166,7 @@ The value of the catalog is not the individual patterns (each is fairly obvious 
 ---
 
 ### 9. Data Curation
-**Problem:** Foundation data products are assembled from multiple sources, sometimes with overlapping or conflicting representations of the same entity. How do you produce a single, authoritative, curated record?
+**Problem:** Curated data products are assembled from multiple sources, sometimes with overlapping or conflicting representations of the same entity. Producing a single, authoritative, curated record requires explicit rules.
 
 **Solution:** Apply business curation rules to resolve conflicts, apply entity resolution, and produce a golden record per entity. Curation decisions are explicit and auditable.
 
@@ -183,9 +183,9 @@ The value of the catalog is not the individual patterns (each is fairly obvious 
 ---
 
 ### 10. Data Contracts (Pattern)
-**Problem:** Consumers of a data product need confidence in what they will receive. How do you formalise the interface between a data product and its consumers?
+**Problem:** Consumers of a data product need confidence in what they will receive. The interface between a data product and its consumers must be formalised.
 
-**Solution:** Define a versioned contract document that specifies schema, quality guarantees, freshness SLA, lineage, and access rules. The contract is the authoritative specification — the pipeline enforces it, not the other way around.
+**Solution:** Define a versioned contract document that specifies schema, quality guarantees, freshness SLA, lineage, and access rules. The contract is the authoritative specification. The pipeline enforces it, not the other way around.
 
 **See:** Full contract model in [data-product-framework.md](data-product-framework.md#data-contracts).
 
@@ -194,26 +194,26 @@ The value of the catalog is not the individual patterns (each is fairly obvious 
 ---
 
 ### 11. Lineage Capture
-**Problem:** When something goes wrong with a data product, how do you trace the problem back to its source? How do you know which downstream products are affected when a source changes?
+**Problem:** When something goes wrong with a data product, the problem must be traceable back to its source. When a source changes, affected downstream products must be identifiable.
 
-**Solution:** Record the lineage graph — which products and sources each pipeline step reads from and writes to — at execution time, not just at design time.
+**Solution:** Record the lineage graph at execution time, not just at design time. Track which products and sources each pipeline step reads from and writes to.
 
 **Levels of lineage:**
 
 | Level | Granularity | Example |
 |-------|-------------|---------|
-| **Product-level** | Which products depend on which | `foundation.customer` ← `origin.crm_customer`, `origin.cbs_customer` |
+| **Product-level** | Which products depend on which | `curated.customer` ← `origin.crm_customer`, `origin.cbs_customer` |
 | **Field-level** | Which output field derives from which input field | `full_name` ← `first_name` + `last_name` from `origin.crm_customer` |
 | **Run-level** | Which specific batch produced which output | Run ID, timestamp, input record counts, output record counts |
 
 **Minimum viable lineage:** Product-level is essential. Field-level is valuable for impact analysis and regulatory reporting. Run-level is essential for debugging.
 
-**The framework responsibility:** The framework captures lineage automatically from pipeline configuration — teams do not write lineage capture code. Every pipeline run emits a lineage record by default.
+**The framework responsibility:** The framework captures lineage automatically from pipeline configuration. Teams do not write lineage capture code. Every pipeline run emits a lineage record by default.
 
 ---
 
 ### 12. Metadata Capture
-**Problem:** Data products are only useful if they are discoverable. How do you ensure every product is described, findable, and understandable without requiring teams to manually maintain documentation?
+**Problem:** Data products are only useful if they are discoverable. Every product must be described, findable, and understandable without requiring teams to manually maintain documentation.
 
 **Solution:** At pipeline execution, automatically publish metadata to a data catalog from the pipeline configuration and contract. The config is the documentation.
 
@@ -248,11 +248,11 @@ The value of the catalog is not the individual patterns (each is fairly obvious 
 ---
 
 ### 14. Data Publish
-**Problem:** Once a data product pipeline has run, validated, and curated its output, how does the product become available to consumers?
+**Problem:** Once a data product pipeline has run, validated, and curated its output, the product must become available to consumers through a controlled publication step.
 
 **Solution:** A publication step that atomically makes the new version of the product available: updates the "current" pointer (so consumers see the new version), registers the SLA as met, and notifies subscribed consumers.
 
-**Atomicity requirement:** Publication must be all-or-nothing. A partially-written product that is visible to consumers — even briefly — can cause silent data quality issues downstream. Use partition swaps, table snapshots, or equivalent atomic replacement mechanisms.
+**Atomicity requirement:** Publication must be all-or-nothing. A partially-written product visible to consumers, even briefly, can cause silent data quality issues downstream. Use partition swaps, table snapshots, or equivalent atomic replacement mechanisms.
 
 **SLA recording:** When a product is successfully published, record: publish timestamp, record count, quality metrics summary. This feeds the SLA dashboard.
 
@@ -261,17 +261,17 @@ The value of the catalog is not the individual patterns (each is fairly obvious 
 ---
 
 ### 15. Checkpoint & Retries
-**Problem:** Pipelines fail. Network timeouts, source system unavailability, transient errors. How do you build pipelines that recover from failure without re-running from scratch or producing duplicate data?
+**Problem:** Pipelines fail: network timeouts, source system unavailability, transient errors. Pipelines need to recover from failure without re-running from scratch or producing duplicate data.
 
-**Solution:** Checkpoint the pipeline at defined intervals — record what has been successfully completed and what has not. On retry, resume from the last successful checkpoint, not from the beginning.
+**Solution:** Checkpoint the pipeline at defined intervals. Record what has been successfully completed and what has not. On retry, resume from the last successful checkpoint, not from the beginning.
 
 **Checkpoint granularity:**
 - At the step level: completed steps are not re-executed; failed step is re-tried
 - At the record level: for large datasets, record which partitions have been successfully processed
 
-**Idempotency requirement:** Every step must be idempotent — running it twice must produce the same result as running it once. This is the precondition for safe retry. If a step is not idempotent (e.g. it appends to a table), it must be made idempotent (e.g. use upsert, or truncate-and-reload, or partition-replace).
+**Idempotency requirement:** Every step must be idempotent. Running it twice must produce the same result as running it once. If a step is not idempotent (e.g. it appends to a table), make it idempotent through upsert, truncate-and-reload, or partition-replace.
 
-**Retry policy:** Define maximum retries, backoff strategy (linear, exponential), and alerting threshold. Do not retry indefinitely — unresolvable failures must surface for human intervention.
+**Retry policy:** Define maximum retries, backoff strategy (linear, exponential), and alerting threshold. Do not retry indefinitely. Unresolvable failures must surface for human intervention.
 
 ---
 
@@ -291,13 +291,13 @@ Each product type in the layered framework uses a defined composition of these p
 
 **Optional patterns:**
 - Batch Transfer (if multi-zone architecture)
-- Data Filtering (only for known exclusion rules — e.g. exclude test records)
+- Data Filtering (only for known exclusion rules, e.g. exclude test records)
 
 **Not applicable at this layer:** Schema Transform, Calculated Fields, Data Enrichment, Data Aggregation, Data Curation. Origin products do not transform.
 
 ---
 
-### Foundation Data Products (Base)
+### Curated Data Products (Base)
 
 **Core pattern sequence:**
 1. Batch Transfer (from origin)
@@ -315,17 +315,17 @@ Each product type in the layered framework uses a defined composition of these p
 13. Checkpoint & Retries (across all steps)
 
 **Optional:**
-- Data Filtering (scope restriction — e.g. a foundation product covering one geography)
-- Data Aggregation (rare at base FDP level — only for pre-computed summary attributes)
+- Data Filtering (scope restriction, e.g. a curated product covering one geography)
+- Data Aggregation (rare at base CDP level, only for pre-computed summary attributes)
 
 ---
 
-### Foundation Data Products (Feature / Consolidated)
+### Feature Data Products (Consolidated)
 
 **Core pattern sequence:**
-1. Batch Transfer (from base FDPs)
+1. Batch Transfer (from base CDPs)
 2. Data Validation (input quality checks)
-3. Calculated Fields (feature computation — derived signals, scores, flags)
+3. Calculated Fields (feature computation: derived signals, scores, flags)
 4. Data Enrichment (cross-entity attribute joins)
 5. Data Aggregation (rolling windows, time-period summaries)
 6. Data Validation (output quality checks)
@@ -336,7 +336,7 @@ Each product type in the layered framework uses a defined composition of these p
 11. Data Publish
 12. Checkpoint & Retries
 
-**Key addition vs. base FDP:** Aggregation is central here. Feature FDPs produce signals, not records.
+**Key addition vs. base CDP:** Aggregation is central here. Feature data products produce signals, not records.
 
 **Temporal correctness requirement:** Point-in-time joins for historical training data must use the Twine algorithm or equivalent. Do not use BETWEEN-style joins at scale.
 
@@ -345,7 +345,7 @@ Each product type in the layered framework uses a defined composition of these p
 ### Consumption Data Products
 
 **Core pattern sequence:**
-1. Batch Transfer (from foundation FDPs)
+1. Batch Transfer (from curated data products)
 2. Data Validation (input checks)
 3. Calculated Fields (consumer-specific derived fields)
 4. Data Filtering (consumer-specific scope)
@@ -357,7 +357,7 @@ Each product type in the layered framework uses a defined composition of these p
 10. Data Publish
 11. Checkpoint & Retries
 
-**Note:** Consumption products do not publish to a schema registry in the same way — they serve a specific consumer and evolve with that consumer's needs, not on a broadly-subscribed schema.
+**Note:** Consumption products do not publish to a schema registry in the same way. They serve a specific consumer and evolve with that consumer's needs, not on a broadly-subscribed schema.
 
 ---
 
@@ -398,7 +398,7 @@ Batch Ingestion / Batch Transfer
               └──► Data Publish ──► Consumer Notification
 ```
 
-Checkpoint & Retries wraps the entire sequence — any step can fail and resume.
+Checkpoint & Retries wraps the entire sequence. Any step can fail and resume.
 
 ---
 
@@ -408,8 +408,8 @@ The framework maps pattern names to implementations. A pipeline configuration re
 
 ```yaml
 pipeline:
-  name: "foundation.customer"
-  type: "foundation-base"
+  name: "curated.customer"
+  type: "curated-base"
 
 steps:
   - pattern: "batch_transfer"
@@ -450,7 +450,7 @@ steps:
 
   - pattern: "data_contracts"
     config:
-      contract_file: "contracts/foundation.customer.yaml"
+      contract_file: "contracts/curated.customer.yaml"
 
   - pattern: "lineage_capture"
   - pattern: "metadata_capture"
@@ -470,8 +470,8 @@ Each `pattern` entry resolves to a concrete implementation (DataTransformation s
 
 ## TODO
 
-- [ ] Streaming equivalents — map each batch pattern to its streaming counterpart (Change Data Capture, event stream validation, streaming aggregation with watermarks)
-- [ ] Pattern testing model — how to unit test pattern implementations without a full pipeline execution environment
-- [ ] Reference data management — lifecycle, versioning, and temporal handling for enrichment reference products
-- [ ] Late arrival handling — formalise the watermark and recompute model for aggregation
-- [ ] Pattern registry — how the framework discovers and loads pattern implementations at runtime
+- [ ] Streaming equivalents: map each batch pattern to its streaming counterpart (Change Data Capture, event stream validation, streaming aggregation with watermarks)
+- [ ] Pattern testing model: how to unit test pattern implementations without a full pipeline execution environment
+- [ ] Reference data management: lifecycle, versioning, and temporal handling for enrichment reference products
+- [ ] Late arrival handling: formalise the watermark and recompute model for aggregation
+- [ ] Pattern registry: how the framework discovers and loads pattern implementations at runtime

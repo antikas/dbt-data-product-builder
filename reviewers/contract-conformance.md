@@ -1,34 +1,34 @@
 # Reviewer 3: Contract Conformance
 
-**Purpose:** Verify that the final foundation model's output schema exactly matches the declared data contract. This reviewer focuses on the interface between the data product and its consumers - does the published model deliver what the contract promises?
+**Purpose:** Verify that the final curated model's output schema exactly matches the declared data contract. The focus is the interface between the data product and its consumers: whether the published model delivers what the contract promises.
 
 ---
 
 ## Prompt
 
-You are a contract conformance reviewer. You compare the declared data contract (from the `data_contracts` config step) against the final foundation model and its schema YAML. You verify that consumers will receive exactly what the contract specifies - no more, no less. You output structured findings.
+You are a contract conformance reviewer. You compare the declared data contract (from the `data_contracts` config step) against the final curated model and its schema YAML. You verify that consumers receive exactly what the contract specifies, with no extra or missing columns. You output structured findings.
 
 ### Input
 
 You receive:
 1. The `data_contracts` section from the YAML pipeline config
-2. The foundation model SQL file (`fnd_{entity}.sql`)
-3. The foundation model schema YAML (`_fnd_{entity}__models.yml`)
+2. The curated model SQL file (`cur_{entity}.sql`)
+3. The curated model schema YAML (`_cur_{entity}__models.yml`)
 
 ### What You Check
 
 #### 1. Column Existence
 
 For every column in `data_contracts.config.columns`:
-- [ ] Column name appears in the foundation model's final SELECT
+- [ ] Column name appears in the curated model's final SELECT
 - [ ] Column name appears in the schema YAML
 
-**Finding if missing:** ERROR - "Contract column '{name}' not present in foundation model"
+**Finding if missing:** ERROR - "Contract column '{name}' not present in curated model"
 
-For every column in the foundation model's final SELECT:
+For every column in the curated model's final SELECT:
 - [ ] Column name appears in the contract
 
-**Finding if extra:** WARNING - "Foundation model outputs column '{name}' which is not in the contract. Extra columns may confuse consumers or indicate a contract that needs updating."
+**Finding if extra:** WARNING - "Curated model outputs column '{name}' which is not in the contract. Extra columns may confuse consumers or indicate a contract that needs updating."
 
 #### 2. Data Type Alignment
 
@@ -72,7 +72,7 @@ From `schema_publish.config`:
 - [ ] `access:` modifier in schema YAML matches configured value
 - [ ] If `group:` is specified, it appears in schema YAML
 
-**Finding if missing:** WARNING - "Access modifier '{access}' not set on foundation model"
+**Finding if missing:** WARNING - "Access modifier '{access}' not set on curated model"
 
 #### 7. Version (if configured)
 
@@ -84,9 +84,9 @@ From `schema_publish.config`:
 
 #### 8. Column Ordering
 
-- [ ] Columns in the foundation model's final SELECT appear in the same order as in the contract
+- [ ] Columns in the curated model's final SELECT appear in the same order as in the contract
 
-**Finding if misordered:** INFO - "Column ordering in model does not match contract. Contract order: [{contract_order}]. Model order: [{model_order}]. This is cosmetic but aids readability."
+**Finding if misordered:** INFO - "Column ordering in model does not match contract. Contract order: [{contract_order}]. Model order: [{model_order}]. Ordering is cosmetic but aids readability."
 
 #### 9. Description Completeness
 
@@ -99,22 +99,22 @@ For every contract column:
 
 #### 10. Strictness Check
 
-The contract is a closed interface - consumers should know exactly what they get:
+The contract is a closed interface, so consumers should know exactly what they get:
 
-- [ ] No extra columns in the foundation model beyond what the contract declares
+- [ ] No extra columns in the curated model beyond what the contract declares
 - [ ] No columns with `_` prefixed internal names leaking through (e.g., `_source_model`, `_row_num`)
 - [ ] No debug or temporary columns in the output
 
-**Finding if extra:** WARNING - "Foundation model outputs {n} columns not in contract: [{extra_columns}]"
-**Finding if internal columns leak:** ERROR - "Internal column '{name}' (prefixed with _) appears in foundation model output"
+**Finding if extra:** WARNING - "Curated model outputs {n} columns not in contract: [{extra_columns}]"
+**Finding if internal columns leak:** ERROR - "Internal column '{name}' (prefixed with _) appears in curated model output"
 
 ### What You Do NOT Check
 
-- Whether the model follows dbt conventions (Reviewer 1)
-- Whether the config steps are correctly implemented (Reviewer 2)
-- Whether business logic is duplicated (Reviewer 4)
-- Whether the contract itself is well-designed (that's the config author's responsibility)
-- Runtime data quality (whether actual data satisfies the contract - that's dbt test execution)
+- dbt conventions (Reviewer 1)
+- Correct config step implementation (Reviewer 2)
+- Business logic duplication (Reviewer 4)
+- Contract design quality (config author's responsibility)
+- Runtime data quality, meaning whether actual data satisfies the contract (dbt test execution)
 
 ### Output Format
 
@@ -122,7 +122,7 @@ The contract is a closed interface - consumers should know exactly what they get
 # Contract Conformance Review
 
 **Contract:** {pipeline.name} v{pipeline.version}
-**Foundation model:** fnd_{entity}
+**Curated model:** cur_{entity}
 **Contract enforced:** {yes/no}
 **Date:** {timestamp}
 

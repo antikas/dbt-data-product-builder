@@ -1,6 +1,6 @@
 # Investment Example - Expected Generator Output
 
-**Config:** `foundation.fund_master` v1.0.0
+**Config:** `curated.fund_master` v1.0.0
 **Generated artefacts:** 7 files
 
 ---
@@ -118,7 +118,7 @@ sources:
 -- Model: int_fund_master_mapped_gp
 -- Pattern: schema_transform
 -- Source: gp_quarterly_report
--- Generated from: foundation.fund_master v1.0.0
+-- Generated from: curated.fund_master v1.0.0
 --
 -- Purpose: Map GP quarterly report fields to canonical fund model.
 -- Deduplication: latest record per fund_id + reporting_quarter.
@@ -127,7 +127,7 @@ sources:
 {{ config(
     materialized='view',
     schema='intermediate',
-    tags=['foundation', 'investments', 'fund_master']
+    tags=['curated', 'investments', 'fund_master']
 ) }}
 
 with source as (
@@ -172,7 +172,7 @@ renamed as (
         cast(reporting_quarter as varchar) as reporting_quarter,
         cast(report_date as date) as report_date
 
-        -- Dropped: extraction_timestamp (not required in foundation model)
+        -- Dropped: extraction_timestamp (not required in curated model)
 
     from cleaned
 
@@ -206,7 +206,7 @@ select * from calculated
 -- Model: int_fund_master_mapped_admin
 -- Pattern: schema_transform
 -- Source: admin_fund_data
--- Generated from: foundation.fund_master v1.0.0
+-- Generated from: curated.fund_master v1.0.0
 --
 -- Purpose: Map administrator fund records to canonical fund model.
 -- Materialisation: view (structural mapping only)
@@ -214,7 +214,7 @@ select * from calculated
 {{ config(
     materialized='view',
     schema='intermediate',
-    tags=['foundation', 'investments', 'fund_master']
+    tags=['curated', 'investments', 'fund_master']
 ) }}
 
 with source as (
@@ -237,7 +237,7 @@ renamed as (
         cast(committed_capital_mm as decimal(18,4)) as committed_capital_mm,
         cast(administrator_name as varchar) as administrator_name
 
-        -- Dropped: last_updated (not required in foundation model)
+        -- Dropped: last_updated (not required in curated model)
 
     from source
 
@@ -278,7 +278,7 @@ select * from calculated
 {{ config(
     materialized='view',
     schema='intermediate',
-    tags=['foundation', 'investments', 'fund_master']
+    tags=['curated', 'investments', 'fund_master']
 ) }}
 
 with gp as (
@@ -407,29 +407,29 @@ select * from filtered
 
 ---
 
-## File 5: models/foundation/fnd_fund_master.sql
+## File 5: models/curated/cur_fund_master.sql
 
 ```sql
--- Model: fnd_fund_master
--- Foundation Data Product: foundation.fund_master v1.0.0
+-- Model: cur_fund_master
+-- Curated Data Product: curated.fund_master v1.0.0
 -- Owner: investment-data-team
 -- Domain: investments
 -- Description: Canonical fund entity - golden record resolved from GP quarterly reports
 --   and fund administrator data. One record per fund, with survivorship rules
 --   preferring GP data for financial metrics and administrator data for legal details.
 --
--- This model is the published foundation data product.
+-- This model is the published curated data product.
 -- It has an enforced contract - downstream consumers depend on this schema.
 -- Do not modify without updating the contract and notifying consumers.
 --
--- Build: dbt build --select fnd_fund_master+
--- Test:  dbt test --select fnd_fund_master
+-- Build: dbt build --select cur_fund_master+
+-- Test:  dbt test --select cur_fund_master
 -- Docs:  dbt docs generate && dbt docs serve
 
 {{ config(
     materialized='incremental',
-    schema='foundation',
-    tags=['foundation', 'investments', 'fund_master'],
+    schema='curated',
+    tags=['curated', 'investments', 'fund_master'],
     contract={'enforced': true},
     unique_key='fund_id',
     incremental_strategy='merge',
@@ -500,7 +500,7 @@ models:
     config:
       materialized: view
       schema: intermediate
-      tags: ['foundation', 'investments', 'fund_master']
+      tags: ['curated', 'investments', 'fund_master']
     columns:
       - name: fund_id
         description: "Canonical fund identifier"
@@ -542,7 +542,7 @@ models:
     config:
       materialized: view
       schema: intermediate
-      tags: ['foundation', 'investments', 'fund_master']
+      tags: ['curated', 'investments', 'fund_master']
     columns:
       - name: fund_id
         description: "Canonical fund identifier"
@@ -572,7 +572,7 @@ models:
     config:
       materialized: view
       schema: intermediate
-      tags: ['foundation', 'investments', 'fund_master']
+      tags: ['curated', 'investments', 'fund_master']
     columns:
       - name: fund_id
         description: "Canonical fund identifier (entity-resolved)"
@@ -583,20 +583,20 @@ models:
 
 ---
 
-## File 7: models/foundation/_fnd_fund_master__models.yml
+## File 7: models/curated/_cur_fund_master__models.yml
 
 ```yaml
 version: 2
 
 models:
-  - name: fnd_fund_master
+  - name: cur_fund_master
     description: >
-      Foundation fund master - the canonical fund entity for downstream consumption.
+      Curated fund master - the canonical fund entity for downstream consumption.
       One record per fund. Contract-enforced schema. Breaking changes require version increment.
     config:
       materialized: incremental
-      schema: foundation
-      tags: ['foundation', 'investments', 'fund_master']
+      schema: curated
+      tags: ['curated', 'investments', 'fund_master']
       contract:
         enforced: true
     access: public
@@ -734,10 +734,10 @@ models:
 ```sql
 -- Test: TVPI must be non-negative when calculated
 -- Severity: error
--- Generated from: foundation.fund_master data_validation (post)
+-- Generated from: curated.fund_master data_validation (post)
 
 select *
-from {{ ref('fnd_fund_master') }}
+from {{ ref('cur_fund_master') }}
 where tvpi is not null and tvpi < 0
 ```
 
@@ -745,10 +745,10 @@ where tvpi is not null and tvpi < 0
 ```sql
 -- Test: Called capital must not exceed committed capital
 -- Severity: error
--- Generated from: foundation.fund_master data_validation (post)
+-- Generated from: curated.fund_master data_validation (post)
 
 select *
-from {{ ref('fnd_fund_master') }}
+from {{ ref('cur_fund_master') }}
 where called_capital_mm > committed_capital_mm + 0.01
 ```
 
@@ -764,7 +764,7 @@ where called_capital_mm > committed_capital_mm + 0.01
 {{ config(
     materialized='table',
     schema='intermediate',
-    tags=['foundation', 'investments', 'fund_master', 'quarantine']
+    tags=['curated', 'investments', 'fund_master', 'quarantine']
 ) }}
 
 with source as (
@@ -835,9 +835,9 @@ packages:
 | 2 | models/intermediate/int_fund_master_mapped_gp.sql | schema_transform + calculated_fields | ~75 |
 | 3 | models/intermediate/int_fund_master_mapped_admin.sql | schema_transform + calculated_fields | ~50 |
 | 4 | models/intermediate/int_fund_master_curated.sql | data_curation + enrichment + filtering | ~110 |
-| 5 | models/foundation/fnd_fund_master.sql | final foundation model | ~55 |
+| 5 | models/curated/cur_fund_master.sql | final curated model | ~55 |
 | 6 | models/intermediate/_int_fund_master__models.yml | intermediate schema | ~80 |
-| 7 | models/foundation/_fnd_fund_master__models.yml | foundation schema + contract | ~130 |
+| 7 | models/curated/_cur_fund_master__models.yml | curated schema + contract | ~130 |
 | 8 | tests/singular/assert_fund_master_tvpi_non_negative.sql | post-validation | ~8 |
 | 9 | tests/singular/assert_fund_master_called_le_committed.sql | post-validation | ~8 |
 | 10 | models/intermediate/int_fund_master_quarantine.sql | quarantine | ~50 |

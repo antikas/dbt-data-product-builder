@@ -1,6 +1,6 @@
-# Customer Orders Example: Customer Foundation Data Product
+# Customer Orders Example: Customer Curated Data Product
 #
-# This config demonstrates a simpler FDP with:
+# This config demonstrates a simpler CDP with:
 # - Two source systems (CRM and billing)
 # - Schema transform per source
 # - Calculated fields (inline)
@@ -12,9 +12,9 @@
 # - Full refresh strategy (no incremental)
 
 pipeline:
-  name: "foundation.customer"
+  name: "curated.customer"
   version: "2.1.0"
-  product_type: "foundation-base"
+  product_type: "curated-base"
   owner: "customer-domain"
   domain: "customer"
   description: >
@@ -24,12 +24,12 @@ pipeline:
 
   dbt:
     target_schema: "intermediate"
-    foundation_schema: "foundation"
+    curated_schema: "curated"
     model_prefix: "int"
-    final_model_prefix: "fnd"
+    final_model_prefix: "cur"
     materialization: "view"
     final_materialization: "table"
-    tags: ["foundation", "customer"]
+    tags: ["curated", "customer"]
 
 steps:
 
@@ -365,7 +365,7 @@ steps:
   - pattern: "data_contracts"
     config:
       contract_enforced: true
-      description: "Foundation customer entity - one record per customer, contract-enforced."
+      description: "Curated customer entity - one record per customer, contract-enforced."
       columns:
         - name: "customer_id"
           data_type: "varchar"

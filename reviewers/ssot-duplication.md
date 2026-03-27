@@ -1,6 +1,6 @@
 # Reviewer 4: SSOT / Duplication
 
-**Purpose:** Detect duplicated business logic, repeated expressions, and SSOT violations across the generated dbt artefacts. A bug fix should require changing exactly one file - if the same logic appears in multiple places, you have a duplication problem.
+**Purpose:** Detect duplicated business logic, repeated expressions, and SSOT violations across the generated dbt artefacts. A bug fix should require changing exactly one file. Logic that appears in multiple places is a duplication problem.
 
 ---
 
@@ -29,7 +29,7 @@ Scan all SQL models for identical or near-identical expressions:
 - [ ] No CASE expression appears in more than one model file
 - [ ] No complex SQL expression (>1 line) appears in more than one model file
 - [ ] No business rule (calculated field) is reimplemented in a downstream model
-  - e.g., `is_active` computed in `int_{entity}_mapped.sql` and again in `fnd_{entity}.sql`
+  - e.g., `is_active` computed in `int_{entity}_mapped.sql` and again in `cur_{entity}.sql`
 
 **Detection approach:**
 - Extract all CASE expressions from all models
@@ -66,7 +66,7 @@ Scan all SQL models for identical or near-identical expressions:
 #### 5. Description Duplication
 
 - [ ] Column descriptions in schema YAML are not copy-pasted across models
-  - The same column in staging, intermediate, and foundation should have consistent descriptions, but they should reflect the column's role at that layer
+  - The same column in staging, intermediate, and curated should have consistent descriptions, but they should reflect the column's role at that layer
 - [ ] No description is a verbatim copy of another column's description (unless they are genuinely the same thing)
 
 **Finding if detected:** INFO - "Description for '{column}' in {model_1} is identical to '{column}' in {model_2}. Consider using a dbt doc block for shared descriptions."
@@ -112,10 +112,10 @@ Check for unnecessary pass-through patterns:
 ### What You Do NOT Check
 
 - dbt conventions or naming (Reviewer 1)
-- Whether config steps are implemented (Reviewer 2)
+- Config step implementation (Reviewer 2)
 - Contract conformance (Reviewer 3)
-- Whether the business logic is correct (config author's responsibility)
-- Duplication across different pipelines/products (this reviewer checks within one pipeline's output)
+- Business logic correctness (config author's responsibility)
+- Cross-pipeline duplication (scope is within one pipeline's output only)
 
 ### Output Format
 

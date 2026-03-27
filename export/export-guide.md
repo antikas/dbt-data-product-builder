@@ -1,6 +1,6 @@
 # Export Guide
 
-**Purpose:** How to package the dbt FDP Build prompt pack for different AI tools.
+**Purpose:** How to package the dbt Data Product Builder prompt pack for different AI tools.
 
 ---
 

@@ -1,4 +1,4 @@
-# dbt FDP Build Orchestrator
+# dbt Data Product Builder Orchestrator
 
 **Purpose:** Coordinates the generation and review pipeline. Runs the generator, then each reviewer in fixed order, manages the iteration loop until the output is clean or the iteration cap is hit.
 
@@ -6,7 +6,7 @@
 
 ## Prompt
 
-You are the dbt FDP Build orchestrator. You coordinate the full generation and review cycle for a Foundation Data Product. You run the generator, then four reviewers in sequence, and iterate until the output passes all reviews or the iteration cap is reached.
+You are the dbt Data Product Builder orchestrator. You coordinate the full generation and review cycle for a Curated Data Product. You run the generator, then four reviewers in sequence, and iterate until the output passes all reviews or the iteration cap is reached.
 
 ### Your Workflow
 
@@ -60,7 +60,7 @@ You are the dbt FDP Build orchestrator. You coordinate the full generation and r
 Before generating anything:
 1. Parse the YAML config
 2. Check all required fields are present
-3. Verify `product_type` is `"foundation-base"`
+3. Verify `product_type` is `"curated-base"`
 4. Verify step ordering follows the framework composition rules
 5. Verify source references resolve
 6. Verify entity_key is producible from declared transforms
@@ -107,7 +107,7 @@ Run the pattern compliance reviewer (see `reviewers/pattern-compliance.md`) with
 
 Run the contract conformance reviewer (see `reviewers/contract-conformance.md`) with:
 - The `data_contracts` config section
-- The foundation model and its schema YAML
+- The curated model and its schema YAML
 
 **If ERRORs:** Fix and iterate (max 3). If stuck: STOP.
 **If only WARNING/INFO:** Collect, continue to Review 4.
@@ -124,7 +124,7 @@ Run the SSOT reviewer (see `reviewers/ssot-duplication.md`) against all generate
 Output the final, reviewed artefacts with a consolidated summary:
 
 ```markdown
-# dbt FDP Build - Generation Complete
+# dbt Data Product Builder - Generation Complete
 
 ## Pipeline: {pipeline.name} v{pipeline.version}
 
@@ -167,7 +167,7 @@ areas for improvement.}
 1. Copy generated files into your dbt project
 2. Run `dbt deps` to install required packages
 3. Run `dbt compile` to verify SQL compiles
-4. Run `dbt build --select fnd_{entity}+` to build and test
+4. Run `dbt build --select cur_{entity}+` to build and test
 5. Run `dbt docs generate && dbt docs serve` to verify documentation
 6. Review the config-model-mapping doc for lineage correctness
 ```
@@ -202,7 +202,7 @@ When a reviewer returns ERROR findings, apply fixes in this order:
 ### When to Escalate to the User
 
 Escalate (output findings and ask for guidance) when:
-- A reviewer finding contradicts the config (config may need updating, not the code)
+- A reviewer finding contradicts the config (the config itself may need updating)
 - Two reviewers produce conflicting requirements
 - A fix would require changing the config schema
 - The iteration cap is hit

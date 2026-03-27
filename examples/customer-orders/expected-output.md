@@ -1,6 +1,6 @@
 # Customer Orders Example - Expected Generator Output
 
-**Config:** `foundation.customer` v2.1.0
+**Config:** `curated.customer` v2.1.0
 **Generated artefacts:** 7 files (no quarantine, no singular tests)
 
 ---
@@ -57,12 +57,12 @@ sources:
 -- Model: int_customer_mapped_crm
 -- Pattern: schema_transform + calculated_fields
 -- Source: crm_customer
--- Generated from: foundation.customer v2.1.0
+-- Generated from: curated.customer v2.1.0
 
 {{ config(
     materialized='view',
     schema='intermediate',
-    tags=['foundation', 'customer']
+    tags=['curated', 'customer']
 ) }}
 
 with source as (
@@ -114,12 +114,12 @@ select * from calculated
 -- Model: int_customer_mapped_billing
 -- Pattern: schema_transform
 -- Source: billing_customer
--- Generated from: foundation.customer v2.1.0
+-- Generated from: curated.customer v2.1.0
 
 {{ config(
     materialized='view',
     schema='intermediate',
-    tags=['foundation', 'customer']
+    tags=['curated', 'customer']
 ) }}
 
 with source as (
@@ -160,7 +160,7 @@ select * from renamed
 {{ config(
     materialized='view',
     schema='intermediate',
-    tags=['foundation', 'customer']
+    tags=['curated', 'customer']
 ) }}
 
 with crm as (
@@ -253,22 +253,22 @@ select * from filtered
 
 ---
 
-## File 5: models/foundation/fnd_customer.sql
+## File 5: models/curated/cur_customer.sql
 
 ```sql
--- Model: fnd_customer
--- Foundation Data Product: foundation.customer v2.1.0
+-- Model: cur_customer
+-- Curated Data Product: curated.customer v2.1.0
 -- Owner: customer-domain
 -- Domain: customer
 --
--- Build: dbt build --select fnd_customer+
--- Test:  dbt test --select fnd_customer
+-- Build: dbt build --select cur_customer+
+-- Test:  dbt test --select cur_customer
 -- Docs:  dbt docs generate && dbt docs serve
 
 {{ config(
     materialized='table',
-    schema='foundation',
-    tags=['foundation', 'customer'],
+    schema='curated',
+    tags=['curated', 'customer'],
     contract={'enforced': true}
 ) }}
 
@@ -357,18 +357,18 @@ models:
 
 ---
 
-## File 7: models/foundation/_fnd_customer__models.yml
+## File 7: models/curated/_cur_customer__models.yml
 
 ```yaml
 version: 2
 
 models:
-  - name: fnd_customer
-    description: "Foundation customer entity - one record per customer, contract-enforced."
+  - name: cur_customer
+    description: "Curated customer entity - one record per customer, contract-enforced."
     config:
       materialized: table
-      schema: foundation
-      tags: ['foundation', 'customer']
+      schema: curated
+      tags: ['curated', 'customer']
       contract:
         enforced: true
     access: protected
@@ -501,13 +501,13 @@ Note: `dbt_expectations` is required for the email regex validation in pre-valid
 | 2 | int_customer_mapped_crm.sql | schema_transform + calculated_fields | CRM source |
 | 3 | int_customer_mapped_billing.sql | schema_transform | Billing source |
 | 4 | int_customer_curated.sql | curation + enrichment + filtering | Golden record |
-| 5 | fnd_customer.sql | foundation model | Table, contract enforced |
+| 5 | cur_customer.sql | curated model | Table, contract enforced |
 | 6 | _int_customer__models.yml | intermediate schema | 3 models |
-| 7 | _fnd_customer__models.yml | foundation schema + contract | PII-tagged |
+| 7 | _cur_customer__models.yml | curated schema + contract | PII-tagged |
 
-Compared to the investment example, this config is simpler:
-- No deduplication (sources are clean)
-- No quarantine (simpler DQ approach)
-- No incremental (full refresh)
-- No singular tests (all validation maps to schema-level tests)
+The customer config is simpler than the investment example:
+- No deduplication, because the sources are already clean
+- No quarantine model, using schema-level tests only for data quality
+- Full refresh instead of incremental
+- No singular tests, since all validation maps to schema-level tests
 - PII tagging demonstrates governance metadata

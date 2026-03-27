@@ -1,14 +1,14 @@
-# dbt FDP Build - YAML Config Specification
+# dbt Data Product Builder - YAML Config Specification
 
 **Created:** 2026-03-25
 **Status:** Active
-**Purpose:** SSOT for the YAML config schema accepted by the dbt FDP Build generator prompt
+**Purpose:** SSOT for the YAML config schema accepted by the dbt Data Product Builder generator prompt
 
 ---
 
 ## Relationship to the Data Product Framework
 
-This config schema uses the **exact top-level structure** from the Data Product Framework DESIGN.md §4.1:
+The config schema uses the **exact top-level structure** from the Data Product Framework DESIGN.md §4.1:
 
 ```
 pipeline:    → product identity and metadata
@@ -16,7 +16,7 @@ steps:       → ordered sequence of pattern configurations
 checkpointing: → retry and incremental strategy
 ```
 
-The framework schema uses file references (`rules_file:`, `mapping_file:`, `contract_file:`) because it targets multiple platforms. This dbt-specific pack **expands those references inline** - you define mappings, rules, and contracts directly in the config rather than pointing to separate files. This makes the config self-contained for prompt-based generation.
+The framework schema uses file references (`rules_file:`, `mapping_file:`, `contract_file:`) because it targets multiple platforms. The dbt-specific pack **expands those references inline**: mappings, rules, and contracts are defined directly in the config rather than pointing to separate files. The result is a self-contained config suited to prompt-based generation.
 
 **Expression language:** This pack uses SQL expressions (standard SQL, not dialect-specific). The framework's neutral expression language (DESIGN.md §8, decision D9) remains an open design problem - this dbt pack does not resolve or change that. SQL is used here because the target is dbt, which is SQL-native.
 
@@ -28,9 +28,9 @@ The framework schema uses file references (`rules_file:`, `mapping_file:`, `cont
 
 ```yaml
 pipeline:
-  name: string                           # required - product identifier, e.g. "foundation.fund_master"
+  name: string                           # required - product identifier, e.g. "curated.fund_master"
   version: string                        # required - semver, e.g. "1.0.0"
-  product_type: "foundation-base"        # required - fixed for this pack
+  product_type: "curated-base"        # required - fixed for this pack
   owner: string                          # required - team or person, e.g. "investment-data-team"
   domain: string                         # required - business domain, e.g. "investments"
   description: string                    # required - human-readable purpose
@@ -39,16 +39,16 @@ pipeline:
   dbt:
     project_name: string                 # optional - existing dbt project name (for integration)
     target_schema: string                # default: "intermediate" - schema for intermediate models
-    foundation_schema: string            # default: "foundation" - schema for final foundation model
+    curated_schema: string               # default: "curated" - schema for final curated model
     model_prefix: string                 # default: "int" - prefix for intermediate models
-    final_model_prefix: string           # default: "fnd" - prefix for the final foundation model
+    final_model_prefix: string           # default: "cur" - prefix for the final curated model
     materialization: string              # default: "view" - default for intermediate models
                                          #   view: lightweight, no storage cost, recomputed on query
                                          #   table: persisted, faster reads, higher storage
                                          #   incremental: append/merge, for large or growing datasets
                                          #   ephemeral: CTE only, not queryable directly
-    final_materialization: string        # default: "table" - for the foundation model
-                                         #   table recommended: foundation products are consumed widely
+    final_materialization: string        # default: "table" - for the curated model
+                                         #   table recommended: curated products are consumed widely
                                          #   incremental: when dataset is large and has a reliable update key
     tags: [string]                       # optional - dbt tags applied to all generated models
     grants: {}                           # optional - dbt grants config, e.g. { select: ["analyst_role"] }
@@ -97,7 +97,7 @@ checkpointing: CheckpointConfig          # optional - incremental and retry stra
 
 ### Pattern: schema_transform
 
-**Purpose:** Maps source fields to the canonical foundation schema. Structural mapping only - renaming, type casting, null handling, dropping unwanted fields. No business logic.
+**Purpose:** Maps source fields to the canonical curated schema. Structural mapping only - renaming, type casting, null handling, dropping unwanted fields. No business logic.
 
 ```yaml
 - pattern: "schema_transform"
@@ -151,8 +151,8 @@ checkpointing: CheckpointConfig          # optional - incremental and retry stra
 
 **Notes:**
 - Schema transform is **structural only**. If you need to compute derived values, use `calculated_fields`. If you need to join reference data, use `data_enrichment`.
-- One `schema_transform` per source. If your FDP combines multiple sources, use separate transforms and combine them in `data_curation`.
-- The `deduplication` section handles source duplicates. This is common in CDC-based extracts where multiple versions of a record arrive.
+- One `schema_transform` per source. If your CDP combines multiple sources, use separate transforms and combine them in `data_curation`.
+- The `deduplication` section handles source duplicates, which are common in CDC-based extracts where multiple versions of a record arrive.
 
 ---
 
@@ -297,20 +297,20 @@ checkpointing: CheckpointConfig          # optional - incremental and retry stra
 
 **Notes:**
 - Predicates are written as **inclusion** conditions (what to keep). The generator applies them as WHERE clauses.
-- `severity: "flag"` keeps the record but adds a boolean column. This is useful for soft exclusions where downstream consumers decide whether to include flagged records.
+- `severity: "flag"` keeps the record but adds a boolean column. Useful for soft exclusions where downstream consumers decide whether to include flagged records.
 - `log_counts: true` adds audit comments to the SQL. In production, you may want to materialize counts to a monitoring table - that's a custom extension beyond this pack.
 
 ---
 
 ### Pattern: data_validation (pre and post)
 
-**Purpose:** Detect and handle data that violates quality constraints. Pre-validation checks source data before transformation. Post-validation checks the foundation model output.
+**Purpose:** Detect and handle data that violates quality constraints. Pre-validation checks source data before transformation. Post-validation checks the curated model output.
 
 ```yaml
 - pattern: "data_validation"
   stage: string                          # required - "pre" or "post"
                                          #   pre: validates source/staging inputs
-                                         #   post: validates the final foundation model
+                                         #   post: validates the final curated model
 
   config:
     rules:
@@ -358,7 +358,7 @@ The main model filters these records out, keeping only passing records.
 
 **Notes:**
 - Pre-validation targets source models (via `source()` or `ref()` to staging).
-- Post-validation targets the final foundation model.
+- Post-validation targets the final curated model.
 - `dbt_expectations` and `dbt_utils` packages are used for advanced test types. The generator will note required packages in the output.
 
 ---
@@ -408,14 +408,14 @@ The main model filters these records out, keeping only passing records.
 
 **Notes:**
 - Aggregation models are almost always materialized as tables (or incremental). Views would recompute on every query.
-- `window_functions` are applied after `group_by` aggregation in a separate CTE. This allows you to compute things like "running total" or "previous period's NAV" on the aggregated results.
+- `window_functions` are applied after `group_by` aggregation in a separate CTE, so you can compute things like "running total" or "previous period's NAV" on the aggregated results.
 - `late_arrival` is only relevant for incremental materializations. It defines how many periods to recompute to account for late-arriving data.
 
 ---
 
 ### Pattern: data_curation
 
-**Purpose:** Resolve the same real-world entity appearing in multiple sources into a single golden record. For Foundation Base, this is the final step that produces the canonical entity.
+**Purpose:** Resolve the same real-world entity appearing in multiple sources into a single golden record. For Curated Base, this is the final step that produces the canonical entity.
 
 ```yaml
 - pattern: "data_curation"
@@ -468,7 +468,7 @@ The main model filters these records out, keeping only passing records.
 ```
 
 **Notes:**
-- `data_curation` is required when your FDP has multiple sources for the same entity. If you have a single source, skip this pattern - `schema_transform` is sufficient.
+- `data_curation` is required when your CDP has multiple sources for the same entity. If you have a single source, skip this pattern - `schema_transform` is sufficient.
 - `match_keys` define how records are joined across sources. For deterministic matching, keys must be exact. If the same entity has different IDs in different sources, you need an ID mapping table (modelled as a reference via `data_enrichment`).
 - `survivorship` resolves conflicts when two sources provide different values for the same field. The most common rule is `first_non_null` with source priority.
 - Fuzzy matching (Levenshtein, Soundex, probabilistic) is explicitly out of scope for the generator. When you need it, write a custom dbt macro or Python model and reference it via `macro_name`.
@@ -477,7 +477,7 @@ The main model filters these records out, keeping only passing records.
 
 ### Pattern: data_contracts
 
-**Purpose:** Define the published contract for the foundation data product. This is what downstream consumers depend on. In dbt, this maps to model contracts (enforced schema) and column-level constraints.
+**Purpose:** Define the published contract for the curated data product. Downstream consumers depend on the contract. In dbt, the contract maps to model contracts (enforced schema) and column-level constraints.
 
 ```yaml
 - pattern: "data_contracts"
@@ -512,7 +512,7 @@ The main model filters these records out, keeping only passing records.
 ```
 
 **Notes:**
-- dbt model contracts are enforced at build time. If the model output doesn't match the contract, `dbt build` fails. This is the strongest guarantee you can provide to consumers.
+- dbt model contracts are enforced at build time. If the model output doesn't match the contract, `dbt build` fails. Contract enforcement is the strongest guarantee you can provide to consumers.
 - `primary_key` constraint implies both `not_null` and `unique`. If you specify `primary_key`, you don't need separate `not_null` and `unique` constraints on the same column.
 - `foreign_key` constraints reference other models in the dbt project. In most warehouses these are not enforced at the database level but are documented and can be tested.
 - `meta` tags are visible in dbt docs and the manifest. Use them for governance metadata (PII flags, sensitivity classification, ownership).
@@ -521,7 +521,7 @@ The main model filters these records out, keeping only passing records.
 
 ### Pattern: lineage_capture
 
-**Purpose:** Record the dependency graph. In dbt, lineage is captured natively through `ref()` and `source()` calls. This config adds an explicit mapping document.
+**Purpose:** Record the dependency graph. In dbt, lineage is captured natively through `ref()` and `source()` calls. The lineage_capture config adds an explicit mapping document.
 
 ```yaml
 - pattern: "lineage_capture"
@@ -535,7 +535,7 @@ The main model filters these records out, keeping only passing records.
 ```
 
 **Notes:**
-- dbt's native lineage (DAG) is always generated regardless of this config. This pattern adds an explicit audit document linking config steps to generated artefacts.
+- dbt's native lineage (DAG) is always generated regardless of config. The pattern adds an explicit audit document linking config steps to generated artefacts.
 - The mapping doc is a markdown file, not a dbt artefact. It's for human review and audit.
 
 ---
@@ -560,14 +560,14 @@ The main model filters these records out, keeping only passing records.
 ```
 
 **Notes:**
-- Every column description comes from the pattern configs (schema_transform, enrichment, contracts). This pattern adds model-level metadata.
+- Every column description comes from the pattern configs (schema_transform, enrichment, contracts). metadata_capture adds model-level metadata on top.
 - `doc_blocks` generate dbt `{% docs %}` blocks that can be referenced in schema.yml descriptions.
 
 ---
 
 ### Pattern: schema_publish
 
-**Purpose:** Control visibility and versioning of the foundation model. In dbt, this maps to access modifiers, model versions, and documentation.
+**Purpose:** Control visibility and versioning of the curated model. In dbt, this maps to access modifiers, model versions, and documentation.
 
 ```yaml
 - pattern: "schema_publish"
@@ -579,7 +579,7 @@ The main model filters these records out, keeping only passing records.
     group: string                        # optional - dbt model group for access control
     version: integer                     # optional - dbt model version number
                                          #   When set, generates a versioned model definition
-                                         #   e.g. {{ ref('fnd_fund_master', v=1) }}
+                                         #   e.g. {{ ref('cur_fund_master', v=1) }}
     deprecation_date: string             # optional - ISO date when this version is deprecated
                                          #   Only relevant when version is set
     generate_version_manifest: boolean   # default: false
@@ -593,7 +593,7 @@ The main model filters these records out, keeping only passing records.
 
 ### Pattern: data_publish
 
-**Purpose:** Guidance for making the foundation product available to consumers. In dbt, publication happens via `dbt build` and access controls.
+**Purpose:** Guidance for making the curated product available to consumers. In dbt, publication happens via `dbt build` and access controls.
 
 ```yaml
 - pattern: "data_publish"
@@ -655,7 +655,7 @@ checkpointing:
 The generator validates the config before generating any artefacts. These rules are checked:
 
 1. **Required fields:** All required fields must be present.
-2. **Product type:** Must be `"foundation-base"` for this pack.
+2. **Product type:** Must be `"curated-base"` for this pack.
 3. **Pattern ordering:** Steps must follow the framework composition order (batch_transfer - validation - schema_transform - calculated_fields - enrichment - filtering - curation - aggregation - validation - contracts - lineage - metadata - schema_publish - data_publish).
 4. **No forbidden patterns:** Origin-only patterns (batch_ingestion) must not appear.
 5. **Source references:** Every `source_ref` in schema_transform must match a source declared in batch_transfer.
@@ -669,13 +669,13 @@ The generator validates the config before generating any artefacts. These rules 
 
 ## Minimal Config Example
 
-The simplest valid config - a single-source foundation product with schema mapping only:
+The simplest valid config - a single-source curated product with schema mapping only:
 
 ```yaml
 pipeline:
-  name: "foundation.product_dim"
+  name: "curated.product_dim"
   version: "1.0.0"
-  product_type: "foundation-base"
+  product_type: "curated-base"
   owner: "product-team"
   domain: "catalog"
   description: "Canonical product dimension from the catalog system"
@@ -777,9 +777,9 @@ checkpointing:
   strategy: "full_refresh"
 ```
 
-This produces:
+The generator produces:
 - `sources.yml` with `catalog_products` source definition
 - `int_product_dim_mapped.sql` with field mappings and type casts
-- `fnd_product_dim.sql` as the final foundation model with contract enforcement
+- `cur_product_dim.sql` as the final curated model with contract enforcement
 - Schema.yml files with tests (uniqueness, completeness), descriptions, and meta tags
 - Config-model-mapping document

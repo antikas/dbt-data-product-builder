@@ -1,6 +1,6 @@
-# Investment Domain Example: Fund Master Foundation Data Product
+# Investment Domain Example: Fund Master Curated Data Product
 #
-# This config demonstrates a multi-source FDP with:
+# This config demonstrates a multi-source CDP with:
 # - Two source systems (GP reports and administrator data)
 # - Schema transform per source
 # - Calculated fields (inline)
@@ -12,9 +12,9 @@
 # - Incremental strategy
 
 pipeline:
-  name: "foundation.fund_master"
+  name: "curated.fund_master"
   version: "1.0.0"
-  product_type: "foundation-base"
+  product_type: "curated-base"
   owner: "investment-data-team"
   domain: "investments"
   description: >
@@ -24,12 +24,12 @@ pipeline:
 
   dbt:
     target_schema: "intermediate"
-    foundation_schema: "foundation"
+    curated_schema: "curated"
     model_prefix: "int"
-    final_model_prefix: "fnd"
+    final_model_prefix: "cur"
     materialization: "view"
     final_materialization: "incremental"
-    tags: ["foundation", "investments", "fund_master"]
+    tags: ["curated", "investments", "fund_master"]
 
 steps:
 
@@ -430,7 +430,7 @@ steps:
         - field: "fund_id"
           type: "uniqueness"
           severity: "error"
-          description: "Fund ID must be unique in the foundation model (one golden record per fund)"
+          description: "Fund ID must be unique in the curated model (one golden record per fund)"
         - field: "fund_id"
           type: "completeness"
           severity: "error"
@@ -473,7 +473,7 @@ steps:
     config:
       contract_enforced: true
       description: >
-        Foundation fund master - the canonical fund entity for downstream consumption.
+        Curated fund master - the canonical fund entity for downstream consumption.
         One record per fund. Contract-enforced schema. Breaking changes require version increment.
       columns:
         - name: "fund_id"
